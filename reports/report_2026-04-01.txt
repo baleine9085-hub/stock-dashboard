@@ -1,0 +1,116 @@
+============================================================
+  AI 주식 분석 리포트 - 2026-04-01
+============================================================
+
+[ 시장 현황 ]
+  S&P 500        :   6,494.30  (+2.37%)
+  나스닥            :  21,478.68  (+3.29%)
+  다우존스           :  46,170.70  (+2.11%)
+  공포지수(VIX)      :      26.47  (-13.52%)
+  금              :   4,689.60  (+3.61%)
+  오일(WTI)        :     101.86  (-0.99%)
+  비트코인           :  67,689.28  (+1.50%)
+  달러/원           :   1,508.52  (+0.10%)
+  달러인덱스          :      99.96  (-0.55%)
+
+[ AI 시장 분석 ]
+AI 분석 오류: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash
+Please retry in 57.561972104s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.0-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.0-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.0-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, retry_delay {
+  seconds: 57
+}
+]
+
+[ 추천 종목 TOP 10 ]
+
+  #1 PFE - 점수: 95/100
+     현재가: $27.88 | 5일수익률: +2.2%
+     RSI: 56.2 | MACD: golden | 추세: bullish
+     이유: MACD 골든크로스, 이동평균 정배열, RSI 적정 구간
+
+  #2 GLW - 점수: 80/100
+     현재가: $134.54 | 5일수익률: -8.1%
+     RSI: 52.0 | MACD: neutral | 추세: bullish
+     이유: 이동평균 정배열, RSI 적정 구간
+
+  #3 JPM - 점수: 80/100
+     현재가: $293.89 | 5일수익률: -0.5%
+     RSI: 57.3 | MACD: golden | 추세: neutral
+     이유: MACD 골든크로스, RSI 적정 구간
+
+  #4 BAC - 점수: 80/100
+     현재가: $48.49 | 5일수익률: -0.5%
+     RSI: 49.8 | MACD: golden | 추세: neutral
+     이유: MACD 골든크로스, RSI 적정 구간
+
+  #5 GS - 점수: 80/100
+     현재가: $843.65 | 5일수익률: +0.2%
+     RSI: 55.4 | MACD: golden | 추세: neutral
+     이유: MACD 골든크로스, RSI 적정 구간
+
+  #6 MS - 점수: 80/100
+     현재가: $164.51 | 5일수익률: -0.7%
+     RSI: 55.6 | MACD: golden | 추세: neutral
+     이유: MACD 골든크로스, RSI 적정 구간
+
+  #7 JNJ - 점수: 80/100
+     현재가: $243.21 | 5일수익률: +1.4%
+     RSI: 50.5 | MACD: neutral | 추세: bullish
+     이유: 이동평균 정배열, RSI 적정 구간
+
+  #8 MRK - 점수: 80/100
+     현재가: $120.01 | 5일수익률: +0.5%
+     RSI: 67.7 | MACD: golden | 추세: bullish
+     이유: MACD 골든크로스, 이동평균 정배열
+
+  #9 COST - 점수: 80/100
+     현재가: $993.38 | 5일수익률: +1.9%
+     RSI: 50.6 | MACD: neutral | 추세: bullish
+     이유: 이동평균 정배열, RSI 적정 구간
+
+  #10 WMT - 점수: 80/100
+     현재가: $123.97 | 5일수익률: +0.7%
+     RSI: 52.2 | MACD: golden | 추세: neutral
+     이유: MACD 골든크로스, RSI 적정 구간
