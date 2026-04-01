@@ -1,7 +1,9 @@
-streamlit
-plotly
+fastapi
+uvicorn
+websockets
 yfinance
+finance-datareader
 pandas
 numpy
 requests
-finance-datareader
+rich
