@@ -3,65 +3,58 @@
   "market_snapshot": {
     "S&P 500": {
       "ticker": "^GSPC",
-      "price": 6494.3,
+      "price": 6528.52,
       "prev_close": 6343.72,
-      "change_pct": 2.37,
-      "volume": 1896921000
+      "change_pct": 2.91,
+      "volume": 6396100000
     },
     "나스닥": {
       "ticker": "^IXIC",
-      "price": 21478.68,
+      "price": 21590.63,
       "prev_close": 20794.64,
-      "change_pct": 3.29,
-      "volume": 6161387000
+      "change_pct": 3.83,
+      "volume": 10645070000
     },
     "다우존스": {
       "ticker": "^DJI",
-      "price": 46170.7,
+      "price": 46341.51,
       "prev_close": 45216.14,
-      "change_pct": 2.11,
-      "volume": 328645361
+      "change_pct": 2.49,
+      "volume": 639410000
     },
     "공포지수(VIX)": {
       "ticker": "^VIX",
-      "price": 26.47,
+      "price": 25.25,
       "prev_close": 30.61,
-      "change_pct": -13.52,
+      "change_pct": -17.51,
       "volume": 0
     },
     "금": {
       "ticker": "GC=F",
-      "price": 4689.6,
-      "prev_close": 4526.0,
-      "change_pct": 3.61,
-      "volume": 154043
+      "price": 4699.5,
+      "prev_close": 4647.6,
+      "change_pct": 1.12,
+      "volume": 34980
     },
     "오일(WTI)": {
       "ticker": "CL=F",
-      "price": 101.86,
-      "prev_close": 102.88,
-      "change_pct": -0.99,
-      "volume": 406709
-    },
-    "비트코인": {
-      "ticker": "BTC-USD",
-      "price": 67689.28,
-      "prev_close": 66691.45,
-      "change_pct": 1.5,
-      "volume": 42147024896
+      "price": 102.97,
+      "prev_close": 101.38,
+      "change_pct": 1.57,
+      "volume": 24815
     },
     "달러/원": {
       "ticker": "KRW=X",
-      "price": 1508.52,
-      "prev_close": 1507.02,
-      "change_pct": 0.1,
+      "price": 1512.88,
+      "prev_close": 1516.13,
+      "change_pct": -0.21,
       "volume": 0
     },
     "달러인덱스": {
       "ticker": "DX-Y.NYB",
-      "price": 99.96,
-      "prev_close": 100.51,
-      "change_pct": -0.55,
+      "price": 99.83,
+      "prev_close": 99.96,
+      "change_pct": -0.13,
       "volume": 0
     }
   },
@@ -70,254 +63,52 @@
     {
       "섹터": "AI/성장(QQQ)",
       "ticker": "QQQ",
-      "가격": 574.29,
-      "등락(%)": 2.87,
-      "거래량비율": 0.87,
-      "자금(백만$)": 35718.4
+      "가격": 577.18,
+      "등락(%)": 3.39,
+      "거래량비율": 1.22,
+      "자금(백만$)": 55015.5
     },
     {
       "섹터": "에너지(XLE)",
       "ticker": "XLE",
-      "가격": 60.6,
-      "등락(%)": -2.2,
-      "거래량비율": 1.26,
-      "자금(백만$)": 4206.6
+      "가격": 61.26,
+      "등락(%)": -1.13,
+      "거래량비율": 1.57,
+      "자금(백만$)": 5799.5
     },
     {
       "섹터": "반도체(SOXX)",
       "ticker": "SOXX",
-      "가격": 325.32,
-      "등락(%)": 5.01,
-      "거래량비율": 1.03,
-      "자금(백만$)": 3007.0
+      "가격": 328.66,
+      "등락(%)": 6.09,
+      "거래량비율": 1.41,
+      "자금(백만$)": 4597.0
     },
     {
       "섹터": "금융(XLF)",
       "ticker": "XLF",
-      "가격": 49.22,
-      "등락(%)": 1.77,
-      "거래량비율": 1.02,
-      "자금(백만$)": 2622.5
+      "가격": 49.37,
+      "등락(%)": 2.09,
+      "거래량비율": 1.45,
+      "자금(백만$)": 4212.7
     },
     {
       "섹터": "헬스케어(XLV)",
       "ticker": "XLV",
-      "가격": 145.96,
-      "등락(%)": 1.49,
-      "거래량비율": 0.85,
-      "자금(백만$)": 1748.5
+      "가격": 146.61,
+      "등락(%)": 1.94,
+      "거래량비율": 1.16,
+      "자금(백만$)": 2618.2
     },
     {
       "섹터": "기술(XLK)",
       "ticker": "XLK",
-      "가격": 131.89,
-      "등락(%)": 3.44,
-      "거래량비율": 0.83,
-      "자금(백만$)": 1681.9
+      "가격": 132.9,
+      "등락(%)": 4.24,
+      "거래량비율": 1.16,
+      "자금(백만$)": 2575.2
     }
   ],
-  "recommendations": [
-    {
-      "ticker": "PFE",
-      "price": 27.88,
-      "ret_5d": 2.18,
-      "ret_20d": 4.71,
-      "pos_52w": 88.8,
-      "score": 95,
-      "rsi": 56.2,
-      "macd": "golden",
-      "ma_trend": "bullish",
-      "buy_low": 27.04,
-      "buy_high": 28.15,
-      "target": 32.06,
-      "stop_loss": 25.92,
-      "reasons": [
-        "MACD 골든크로스",
-        "이동평균 정배열",
-        "RSI 적정 구간"
-      ],
-      "ai_analysis": "분석 오류: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\nPlease retry in 57.438623902s. [links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count\"\n  quota_id: \"GenerateContentInputTokensPerModelPerMinute-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerMinutePerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\n, retry_delay {\n  seconds: 57\n}\n]"
-    },
-    {
-      "ticker": "GLW",
-      "price": 134.54,
-      "ret_5d": -8.07,
-      "ret_20d": -7.11,
-      "pos_52w": 65.1,
-      "score": 80,
-      "rsi": 52.0,
-      "macd": "neutral",
-      "ma_trend": "bullish",
-      "buy_low": 130.51,
-      "buy_high": 135.89,
-      "target": 154.73,
-      "stop_loss": 125.13,
-      "reasons": [
-        "이동평균 정배열",
-        "RSI 적정 구간"
-      ],
-      "ai_analysis": "분석 오류: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\nPlease retry in 57.32242467s. [links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count\"\n  quota_id: \"GenerateContentInputTokensPerModelPerMinute-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerMinutePerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\n, retry_delay {\n  seconds: 57\n}\n]"
-    },
-    {
-      "ticker": "JPM",
-      "price": 293.89,
-      "ret_5d": -0.52,
-      "ret_20d": -1.84,
-      "pos_52w": 26.1,
-      "score": 80,
-      "rsi": 57.3,
-      "macd": "golden",
-      "ma_trend": "neutral",
-      "buy_low": 285.07,
-      "buy_high": 296.83,
-      "target": 337.97,
-      "stop_loss": 273.32,
-      "reasons": [
-        "MACD 골든크로스",
-        "RSI 적정 구간"
-      ],
-      "ai_analysis": "분석 오류: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\nPlease retry in 57.208950508s. [links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count\"\n  quota_id: \"GenerateContentInputTokensPerModelPerMinute-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerMinutePerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\n, retry_delay {\n  seconds: 57\n}\n]"
-    },
-    {
-      "ticker": "BAC",
-      "price": 48.49,
-      "ret_5d": -0.52,
-      "ret_20d": -3.04,
-      "pos_52w": 21.4,
-      "score": 80,
-      "rsi": 49.8,
-      "macd": "golden",
-      "ma_trend": "neutral",
-      "buy_low": 47.04,
-      "buy_high": 48.98,
-      "target": 55.77,
-      "stop_loss": 45.1,
-      "reasons": [
-        "MACD 골든크로스",
-        "RSI 적정 구간"
-      ],
-      "ai_analysis": "분석 오류: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\nPlease retry in 57.096612552s. [links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count\"\n  quota_id: \"GenerateContentInputTokensPerModelPerMinute-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerMinutePerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\n, retry_delay {\n  seconds: 57\n}\n]"
-    },
-    {
-      "ticker": "GS",
-      "price": 843.65,
-      "ret_5d": 0.22,
-      "ret_20d": -2.72,
-      "pos_52w": 31.7,
-      "score": 80,
-      "rsi": 55.4,
-      "macd": "golden",
-      "ma_trend": "neutral",
-      "buy_low": 818.34,
-      "buy_high": 852.09,
-      "target": 970.2,
-      "stop_loss": 784.59,
-      "reasons": [
-        "MACD 골든크로스",
-        "RSI 적정 구간"
-      ],
-      "ai_analysis": "분석 오류: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash\nPlease retry in 56.968108162s. [links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerMinutePerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count\"\n  quota_id: \"GenerateContentInputTokensPerModelPerMinute-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\n, retry_delay {\n  seconds: 56\n}\n]"
-    },
-    {
-      "ticker": "MS",
-      "price": 164.51,
-      "ret_5d": -0.69,
-      "ret_20d": -1.83,
-      "pos_52w": 30.1,
-      "score": 80,
-      "rsi": 55.6,
-      "macd": "golden",
-      "ma_trend": "neutral",
-      "buy_low": 159.57,
-      "buy_high": 166.15,
-      "target": 189.18,
-      "stop_loss": 152.99,
-      "reasons": [
-        "MACD 골든크로스",
-        "RSI 적정 구간"
-      ],
-      "ai_analysis": "기술적 지표 기반 선정"
-    },
-    {
-      "ticker": "JNJ",
-      "price": 243.21,
-      "ret_5d": 1.37,
-      "ret_20d": -0.85,
-      "pos_52w": 83.6,
-      "score": 80,
-      "rsi": 50.5,
-      "macd": "neutral",
-      "ma_trend": "bullish",
-      "buy_low": 235.91,
-      "buy_high": 245.64,
-      "target": 279.69,
-      "stop_loss": 226.19,
-      "reasons": [
-        "이동평균 정배열",
-        "RSI 적정 구간"
-      ],
-      "ai_analysis": "기술적 지표 기반 선정"
-    },
-    {
-      "ticker": "MRK",
-      "price": 120.01,
-      "ret_5d": 0.54,
-      "ret_20d": 0.51,
-      "pos_52w": 79.5,
-      "score": 80,
-      "rsi": 67.7,
-      "macd": "golden",
-      "ma_trend": "bullish",
-      "buy_low": 116.41,
-      "buy_high": 121.21,
-      "target": 138.01,
-      "stop_loss": 111.61,
-      "reasons": [
-        "MACD 골든크로스",
-        "이동평균 정배열"
-      ],
-      "ai_analysis": "기술적 지표 기반 선정"
-    },
-    {
-      "ticker": "COST",
-      "price": 993.38,
-      "ret_5d": 1.9,
-      "ret_20d": -1.33,
-      "pos_52w": 80.2,
-      "score": 80,
-      "rsi": 50.6,
-      "macd": "neutral",
-      "ma_trend": "bullish",
-      "buy_low": 963.57,
-      "buy_high": 1003.31,
-      "target": 1142.38,
-      "stop_loss": 923.84,
-      "reasons": [
-        "이동평균 정배열",
-        "RSI 적정 구간"
-      ],
-      "ai_analysis": "기술적 지표 기반 선정"
-    },
-    {
-      "ticker": "WMT",
-      "price": 123.97,
-      "ret_5d": 0.74,
-      "ret_20d": -2.81,
-      "pos_52w": 57.9,
-      "score": 80,
-      "rsi": 52.2,
-      "macd": "golden",
-      "ma_trend": "neutral",
-      "buy_low": 120.25,
-      "buy_high": 125.21,
-      "target": 142.57,
-      "stop_loss": 115.29,
-      "reasons": [
-        "MACD 골든크로스",
-        "RSI 적정 구간"
-      ],
-      "ai_analysis": "기술적 지표 기반 선정"
-    }
-  ],
-  "ai_market_analysis": "AI 분석 오류: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\nPlease retry in 57.561972104s. [links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count\"\n  quota_id: \"GenerateContentInputTokensPerModelPerMinute-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerMinutePerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\n, retry_delay {\n  seconds: 57\n}\n]"
+  "recommendations": [],
+  "ai_market_analysis": "AI 분석 오류: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash\nPlease retry in 55.30796062s. [links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count\"\n  quota_id: \"GenerateContentInputTokensPerModelPerMinute-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerMinutePerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\n, retry_delay {\n  seconds: 55\n}\n]"
 }
