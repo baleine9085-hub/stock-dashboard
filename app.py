@@ -15,7 +15,7 @@ def load_report():
     with open(os.path.join(d, files[0]), "r", encoding="utf-8") as f:
         return json.load(f), files[0]
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=60)
 def get_stock_info(ticker):
     try:
         t = yf.Ticker(ticker)
@@ -114,6 +114,9 @@ tab0, tab1, tab2, tab3 = st.tabs(["관심 종목", "AI 추천 종목", "시장 �
 
 with tab0:
     st.subheader("관심 종목")
+if st.button("실시간 새로고침", key="refresh_watch"):
+    st.cache_data.clear()
+    st.rerun()
     if "watch_sel" not in st.session_state:
         st.session_state.watch_sel = list(WATCHLIST.keys())[0]
 
