@@ -1,4 +1,3 @@
-from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
@@ -7,21 +6,26 @@ import asyncio
 import json
 import requests
 from datetime import datetime, timedelta
+from contextlib import asynccontextmanager
 import sys
 sys.path.append(r'C:\Users\woofe\Desktop\stock-dashboard')
 import config
 
-# 캐시 저장소
-_cache = {"kr": [], "us": [], "timestamp": None}
+# 캐시
+_cache = {"kr": [], "us": [], "macro": {}, "news": [], "fear_greed": 50, "timestamp": None}
 
 async def background_updater():
     while True:
         try:
+            # 병렬 수집
             _cache["kr"] = [get_kr_stock_kis(t) for t in KR_STOCKS]
             _cache["us"] = [get_us_stock(t) for t in US_STOCKS]
+            _cache["macro"] = get_macro()
+            _cache["news"] = get_news()
+            _cache["fear_greed"] = get_fear_greed()
             _cache["timestamp"] = datetime.now().isoformat()
         except Exception as e:
-            print(f"캐시 업데이트 오류: {e}")
+            print(f"업데이트 오류: {e}")
         await asyncio.sleep(5)
 
 @asynccontextmanager
@@ -50,11 +54,73 @@ US_STOCKS = {
     "NVDA": "엔비디아",
     "SNDK": "샌디스크",
     "MU": "마이크론",
+    "INTC": "인텔",
+    "AMD": "AMD",
+    "TSLA": "테슬라",
     "GLW": "코닝",
     "AMAT": "어플라이드머티리얼",
 }
 
-# KIS API 토큰 캐시
+MACRO_TICKERS = {
+    "^IXIC": "나스닥",
+    "^KS11": "코스피",
+    "^KQ11": "코스닥",
+    "GC=F": "금",
+    "SI=F": "은",
+    "CL=F": "WTI유",
+    "^VIX": "VIX",
+    "DX-Y.NYB": "달러인덱스",
+}
+
+def get_macro():
+    result = {}
+    for ticker, name in MACRO_TICKERS.items():
+        try:
+            t = yf.Ticker(ticker)
+            info = t.fast_info
+            price = info.last_price
+            prev = info.previous_close
+            change_pct = ((price - prev) / prev) * 100
+            result[ticker] = {
+                "name": name,
+                "price": round(price, 2),
+                "change_pct": round(change_pct, 2),
+            }
+        except:
+            pass
+    return result
+
+def get_fear_greed():
+    try:
+        res = requests.get(
+            "https://production.dataviz.cnn.io/index/fearandgreed/graphdata",
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=5
+        )
+        data = res.json()
+        return int(float(data["fear_and_greed"]["score"]))
+    except:
+        return 50
+
+def get_news():
+    try:
+        res = requests.get(
+            "https://feeds.bbci.co.uk/news/business/rss.xml",
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=5
+        )
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(res.content)
+        items = root.findall(".//item")
+        news = []
+        for item in items[:10]:
+            title = item.find("title")
+            if title is not None:
+                news.append(title.text)
+        return news
+    except:
+        return ["글로벌 시장 모니터링 중...", "데이터 수집 중..."]
+
 _kis_token = None
 _kis_token_expires = None
 
@@ -75,7 +141,7 @@ def get_kis_token():
         _kis_token_expires = datetime.now() + timedelta(hours=23)
         return _kis_token
     except Exception as e:
-        print(f"KIS 토큰 발급 실패: {e}")
+        print(f"KIS 토큰 오류: {e}")
         return None
 
 def get_kr_stock_kis(ticker):
@@ -94,7 +160,6 @@ def get_kr_stock_kis(ticker):
         res = requests.get(url, headers=headers, params=params)
         data = res.json().get("output", {})
         price = float(data.get("stck_prpr", 0))
-        prev_close = float(data.get("stck_sdpr", 0))
         change = float(data.get("prdy_vrss", 0))
         change_pct = float(data.get("prdy_ctrt", 0))
         return {
@@ -103,12 +168,11 @@ def get_kr_stock_kis(ticker):
             "price": price,
             "change": change,
             "change_pct": change_pct,
-            "prev_close": prev_close,
             "currency": "KRW",
             "source": "KIS실시간",
             "updated": datetime.now().isoformat(),
         }
-    except Exception as e:
+    except:
         return get_kr_stock_fdr(ticker)
 
 def get_kr_stock_fdr(ticker):
@@ -166,25 +230,21 @@ def kr_stocks():
 def us_stocks():
     return _cache["us"] if _cache["us"] else [get_us_stock(t) for t in US_STOCKS]
 
-@app.websocket("/ws/stocks")
-async def websocket_stocks(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        while True:
-            data = {
-                "kr": [get_kr_stock_kis(t) for t in KR_STOCKS],
-                "us": [get_us_stock(t) for t in US_STOCKS],
-                "timestamp": datetime.now().isoformat(),
-            }
-            await websocket.send_text(json.dumps(data))
-            await asyncio.sleep(5)
-    except WebSocketDisconnect:
-        print("클라이언트 연결 종료")
+@app.get("/api/macro")
+def macro():
+    return _cache["macro"] if _cache["macro"] else get_macro()
+
+@app.get("/api/news")
+def news():
+    return _cache["news"] if _cache["news"] else get_news()
+
+@app.get("/api/fear-greed")
+def fear_greed():
+    return {"score": _cache["fear_greed"]}
 
 @app.get("/api/chart/{ticker}")
 def get_chart(ticker: str):
     try:
-        # 한국 주식은 .KS 붙여야 yfinance에서 인식
         yfTicker = f"{ticker}.KS" if ticker in KR_STOCKS else ticker
         stock = yf.Ticker(yfTicker)
         df = stock.history(period="1d", interval="5m")
@@ -211,23 +271,53 @@ def get_recommend(ticker: str):
         stock = yf.Ticker(yfTicker)
         df = stock.history(period="5d", interval="1d")
         price = float(df["Close"].iloc[-1])
-        low5 = float(df["Low"].min())
-        high5 = float(df["High"].max())
-        # 단순 추천 로직
-        buy = round(price * 0.97, 2)
-        sell = round(price * 1.05, 2)
-        stop = round(price * 0.93, 2)
+        news_list = _cache.get("news", [])
+        news_text = " ".join(news_list).lower()
+        
+        # 악재 키워드 감지
+        bad_keywords = ["war", "sanction", "ban", "crash", "crisis", "rate hike", "전쟁", "규제", "금리"]
+        is_bad = any(k in news_text for k in bad_keywords)
+        
+        # 악재면 타점 5~10% 추가 하향
+        discount = 0.10 if is_bad else 0.0
+        
+        buy1 = round(price * (0.97 - discount), 2)
+        buy2 = round(price * (0.93 - discount), 2)
+        buy3 = round(price * (0.88 - discount), 2)
+        sell = round(price * 1.08, 2)
+        stop = round(price * 0.85, 2)
+
         return {
             "ticker": ticker,
             "current": price,
-            "buy": buy,
+            "buy1": buy1,
+            "buy2": buy2,
+            "buy3": buy3,
             "sell": sell,
             "stop_loss": stop,
-            "low5": low5,
-            "high5": high5,
+            "is_bad_news": is_bad,
+            "currency": "KRW" if ticker in KR_STOCKS else "USD",
         }
     except Exception as e:
-            return {"error": str(e)}
+        return {"error": str(e)}
+
+@app.websocket("/ws/stocks")
+async def websocket_stocks(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            data = {
+                "kr": _cache["kr"],
+                "us": _cache["us"],
+                "macro": _cache["macro"],
+                "news": _cache["news"],
+                "fear_greed": _cache["fear_greed"],
+                "timestamp": datetime.now().isoformat(),
+            }
+            await websocket.send_text(json.dumps(data))
+            await asyncio.sleep(5)
+    except WebSocketDisconnect:
+        print("클라이언트 연결 종료")
 
 if __name__ == "__main__":
     import uvicorn
