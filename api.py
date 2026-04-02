@@ -1,53 +1,28 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import yfinance as yf
-import FinanceDataReader as fdr
 import asyncio
 import json
 import requests
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
-import sys
-sys.path.append(r'C:\Users\woofe\Desktop\stock-dashboard')
-import config
+import os
+
+# ✅ 환경변수에서 읽기 (Windows 경로 제거)
+KIS_APP_KEY = os.environ.get("KIS_APP_KEY", "")
+KIS_APP_SECRET = os.environ.get("KIS_APP_SECRET", "")
+KIS_ACCOUNT_NO = os.environ.get("KIS_ACCOUNT_NO", "")
 
 # 캐시
 _cache = {"kr": [], "us": [], "macro": {}, "news": [], "fear_greed": 50, "timestamp": None}
-
-async def background_updater():
-    while True:
-        try:
-            # 병렬 수집
-            _cache["kr"] = [get_kr_stock_kis(t) for t in KR_STOCKS]
-            _cache["us"] = [get_us_stock(t) for t in US_STOCKS]
-            _cache["macro"] = get_macro()
-            _cache["news"] = get_news()
-            _cache["fear_greed"] = get_fear_greed()
-            _cache["timestamp"] = datetime.now().isoformat()
-        except Exception as e:
-            print(f"업데이트 오류: {e}")
-        await asyncio.sleep(5)
-
-@asynccontextmanager
-async def lifespan(app):
-    asyncio.create_task(background_updater())
-    yield
-
-app = FastAPI(lifespan=lifespan)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 KR_STOCKS = {
     "005930": "삼성전자",
     "000660": "SK하이닉스",
     "035420": "NAVER",
     "005380": "현대차",
-    "000270": "기아",
+    "009830": "한화솔루션",
+    "461030": "뉴로메카",
 }
 
 US_STOCKS = {
@@ -80,14 +55,17 @@ def get_macro():
             info = t.fast_info
             price = info.last_price
             prev = info.previous_close
-            change_pct = ((price - prev) / prev) * 100
+            if prev and prev != 0:
+                change_pct = ((price - prev) / prev) * 100
+            else:
+                change_pct = 0
             result[ticker] = {
                 "name": name,
                 "price": round(price, 2),
                 "change_pct": round(change_pct, 2),
             }
-        except:
-            pass
+        except Exception as e:
+            print(f"매크로 오류 {ticker}: {e}")
     return result
 
 def get_fear_greed():
@@ -117,9 +95,10 @@ def get_news():
             title = item.find("title")
             if title is not None:
                 news.append(title.text)
-        return news
-    except:
-        return ["글로벌 시장 모니터링 중...", "데이터 수집 중..."]
+        return news if news else ["글로벌 시장 모니터링 중..."]
+    except Exception as e:
+        print(f"뉴스 오류: {e}")
+        return ["뉴스 연결 중...", "잠시 후 자동 업데이트됩니다"]
 
 _kis_token = None
 _kis_token_expires = None
@@ -128,12 +107,14 @@ def get_kis_token():
     global _kis_token, _kis_token_expires
     if _kis_token and _kis_token_expires and datetime.now() < _kis_token_expires:
         return _kis_token
+    if not KIS_APP_KEY or not KIS_APP_SECRET:
+        return None
     try:
         url = "https://openapi.koreainvestment.com:9443/oauth2/tokenP"
         body = {
             "grant_type": "client_credentials",
-            "appkey": config.KIS_APP_KEY,
-            "appsecret": config.KIS_APP_SECRET,
+            "appkey": KIS_APP_KEY,
+            "appsecret": KIS_APP_SECRET,
         }
         res = requests.post(url, json=body)
         data = res.json()
@@ -148,12 +129,12 @@ def get_kr_stock_kis(ticker):
     try:
         token = get_kis_token()
         if not token:
-            return get_kr_stock_fdr(ticker)
+            return get_kr_stock_yf(ticker)
         url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price"
         headers = {
             "authorization": f"Bearer {token}",
-            "appkey": config.KIS_APP_KEY,
-            "appsecret": config.KIS_APP_SECRET,
+            "appkey": KIS_APP_KEY,
+            "appsecret": KIS_APP_SECRET,
             "tr_id": "FHKST01010100",
         }
         params = {"fid_cond_mrkt_div_code": "J", "fid_input_iscd": ticker}
@@ -173,33 +154,28 @@ def get_kr_stock_kis(ticker):
             "updated": datetime.now().isoformat(),
         }
     except:
-        return get_kr_stock_fdr(ticker)
+        return get_kr_stock_yf(ticker)
 
-def get_kr_stock_fdr(ticker):
+def get_kr_stock_yf(ticker):
     try:
-        end = datetime.today().strftime('%Y-%m-%d')
-        start = (datetime.today() - timedelta(days=5)).strftime('%Y-%m-%d')
-        df = fdr.DataReader(ticker, start, end)
-        if df is None or len(df) == 0:
-            return None
-        latest = df.iloc[-1]
-        prev = df.iloc[-2] if len(df) > 1 else latest
-        price = float(latest['Close'])
-        prev_price = float(prev['Close'])
-        change = price - prev_price
-        change_pct = (change / prev_price) * 100
+        stock = yf.Ticker(f"{ticker}.KS")
+        info = stock.fast_info
+        price = info.last_price
+        prev = info.previous_close
+        change = price - prev
+        change_pct = (change / prev) * 100 if prev else 0
         return {
             "ticker": ticker,
             "name": KR_STOCKS.get(ticker, ticker),
-            "price": price,
+            "price": round(price, 2),
             "change": round(change, 2),
             "change_pct": round(change_pct, 2),
             "currency": "KRW",
-            "source": "FDR지연",
+            "source": "yfinance",
             "updated": datetime.now().isoformat(),
         }
     except Exception as e:
-        return {"ticker": ticker, "error": str(e)}
+        return {"ticker": ticker, "name": KR_STOCKS.get(ticker, ticker), "error": str(e)}
 
 def get_us_stock(ticker):
     try:
@@ -220,7 +196,39 @@ def get_us_stock(ticker):
             "updated": datetime.now().isoformat(),
         }
     except Exception as e:
-        return {"ticker": ticker, "error": str(e)}
+        return {"ticker": ticker, "name": US_STOCKS.get(ticker, ticker), "error": str(e)}
+
+async def background_updater():
+    while True:
+        try:
+            _cache["kr"] = [get_kr_stock_kis(t) for t in KR_STOCKS]
+            _cache["us"] = [get_us_stock(t) for t in US_STOCKS]
+            _cache["macro"] = get_macro()
+            _cache["news"] = get_news()
+            _cache["fear_greed"] = get_fear_greed()
+            _cache["timestamp"] = datetime.now().isoformat()
+            print(f"✅ 캐시 업데이트: {_cache['timestamp']}")
+        except Exception as e:
+            print(f"업데이트 오류: {e}")
+        await asyncio.sleep(5)
+
+@asynccontextmanager
+async def lifespan(app):
+    asyncio.create_task(background_updater())
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.get("/")
+def root():
+    return {"status": "AI Stock Terminal API 🚀", "timestamp": datetime.now().isoformat()}
 
 @app.get("/api/kr-stocks")
 def kr_stocks():
@@ -245,8 +253,8 @@ def fear_greed():
 @app.get("/api/chart/{ticker}")
 def get_chart(ticker: str):
     try:
-        yfTicker = f"{ticker}.KS" if ticker in KR_STOCKS else ticker
-        stock = yf.Ticker(yfTicker)
+        yf_ticker = f"{ticker}.KS" if ticker in KR_STOCKS else ticker
+        stock = yf.Ticker(yf_ticker)
         df = stock.history(period="1d", interval="5m")
         if df is None or len(df) == 0:
             return []
@@ -267,34 +275,23 @@ def get_chart(ticker: str):
 @app.get("/api/recommend/{ticker}")
 def get_recommend(ticker: str):
     try:
-        yfTicker = f"{ticker}.KS" if ticker in KR_STOCKS else ticker
-        stock = yf.Ticker(yfTicker)
+        yf_ticker = f"{ticker}.KS" if ticker in KR_STOCKS else ticker
+        stock = yf.Ticker(yf_ticker)
         df = stock.history(period="5d", interval="1d")
         price = float(df["Close"].iloc[-1])
         news_list = _cache.get("news", [])
         news_text = " ".join(news_list).lower()
-        
-        # 악재 키워드 감지
         bad_keywords = ["war", "sanction", "ban", "crash", "crisis", "rate hike", "전쟁", "규제", "금리"]
         is_bad = any(k in news_text for k in bad_keywords)
-        
-        # 악재면 타점 5~10% 추가 하향
         discount = 0.10 if is_bad else 0.0
-        
-        buy1 = round(price * (0.97 - discount), 2)
-        buy2 = round(price * (0.93 - discount), 2)
-        buy3 = round(price * (0.88 - discount), 2)
-        sell = round(price * 1.08, 2)
-        stop = round(price * 0.85, 2)
-
         return {
             "ticker": ticker,
             "current": price,
-            "buy1": buy1,
-            "buy2": buy2,
-            "buy3": buy3,
-            "sell": sell,
-            "stop_loss": stop,
+            "buy1": round(price * (0.97 - discount), 2),
+            "buy2": round(price * (0.93 - discount), 2),
+            "buy3": round(price * (0.88 - discount), 2),
+            "sell": round(price * 1.08, 2),
+            "stop_loss": round(price * 0.85, 2),
             "is_bad_news": is_bad,
             "currency": "KRW" if ticker in KR_STOCKS else "USD",
         }
