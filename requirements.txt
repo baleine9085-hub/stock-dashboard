@@ -10,3 +10,4 @@ rich
 google-generativeai
 plotly
 streamlit
+pytz
