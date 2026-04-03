@@ -352,7 +352,7 @@ def market_status():
 @app.get("/api/chart/{ticker}")
 def get_chart(ticker: str):
     try:
-       yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
+        yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
         stock = yf.Ticker(yf_ticker)
         df = stock.history(period="1d", interval="5m")
         if df is None or len(df) == 0:
@@ -374,7 +374,7 @@ def get_chart(ticker: str):
 @app.get("/api/recommend/{ticker}")
 def get_recommend(ticker: str):
     try:
-        yf_ticker = f"{ticker}.KS" if ticker in KR_STOCKS else ticker
+        yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
         stock = yf.Ticker(yf_ticker)
         df = stock.history(period="5d", interval="1d")
         price = float(df["Close"].iloc[-1])
@@ -400,7 +400,7 @@ def get_recommend(ticker: str):
             "discount_pct": round(discount * 100, 1),
             "triggered_keywords": triggered[:5],
             "scenario": scenario,
-            "currency": "KRW" if ticker in KR_STOCKS else "USD",
+            "currency": "KRW" if len(ticker) == 6 and ticker.isdigit() else "USD",
         }
     except Exception as e:
         return {"error": str(e)}
