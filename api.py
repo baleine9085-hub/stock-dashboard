@@ -376,7 +376,9 @@ def get_recommend(ticker: str):
     try:
         yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
         stock = yf.Ticker(yf_ticker)
-        df = stock.history(period="5d", interval="1d")
+        df = stock.history(period="1mo", interval="1d")
+        if df is None or len(df) == 0:
+            return {"error": "데이터 없음"}
         price = float(df["Close"].iloc[-1])
         news_list = _cache.get("news", [])
         fear_greed_score = _cache.get("fear_greed", 50)
