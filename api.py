@@ -379,7 +379,9 @@ def get_recommend(ticker: str):
         df = stock.history(period="1mo", interval="1d")
         if df is None or len(df) == 0:
             return {"error": "데이터 없음"}
-        price = float(df["Close"].iloc[-1])
+        price = float(df["Close"].dropna().iloc[-1])
+        if price != price:  # nan 체크
+            return {"error": "가격 데이터 없음"}
         news_list = _cache.get("news", [])
         fear_greed_score = _cache.get("fear_greed", 50)
         macro = _cache.get("macro", {})
