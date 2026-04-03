@@ -82,7 +82,26 @@ def get_kr_market_status():
             return "장외"
     except:
         return "정규"
+def get_us_market_status():
+    try:
+        us_tz = pytz.timezone('America/New_York')
+        now = datetime.now(us_tz)
+        t = now.hour * 60 + now.minute
+        weekday = now.weekday()
+        if weekday >= 5:
+            return "휴장"
+        elif 4*60 <= t < 9*60+30:
+            return "프리마켓"
+        elif 9*60+30 <= t < 16*60:
+            return "정규"
+        elif 16*60 <= t < 20*60:
+            return "애프터마켓"
+        else:
+            return "휴장"
+    except:
+        return "정규"
 
+        
 def get_macro():
     result = {}
     for ticker, name in MACRO_TICKERS.items():
