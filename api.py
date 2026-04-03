@@ -352,7 +352,7 @@ def market_status():
 @app.get("/api/chart/{ticker}")
 def get_chart(ticker: str):
     try:
-        yf_ticker = f"{ticker}.KS" if ticker in KR_STOCKS else ticker
+       yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
         stock = yf.Ticker(yf_ticker)
         df = stock.history(period="1d", interval="5m")
         if df is None or len(df) == 0:
