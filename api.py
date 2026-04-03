@@ -7,28 +7,17 @@ import requests
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 import os
-<<<<<<< HEAD
 import pytz
-=======
-
-# ✅ 환경변수에서 읽기 (Windows 경로 제거)
-KIS_APP_KEY = os.environ.get("KIS_APP_KEY", "")
-KIS_APP_SECRET = os.environ.get("KIS_APP_SECRET", "")
-KIS_ACCOUNT_NO = os.environ.get("KIS_ACCOUNT_NO", "")
->>>>>>> 49c38d129535dfadd75be355bb3b5e30ec8b86c0
 
 KIS_APP_KEY = os.environ.get("KIS_APP_KEY", "")
 KIS_APP_SECRET = os.environ.get("KIS_APP_SECRET", "")
 KIS_ACCOUNT_NO = os.environ.get("KIS_ACCOUNT_NO", "")
 
-<<<<<<< HEAD
 _cache = {
     "kr": [], "us": [], "macro": {}, "news": [],
     "fear_greed": 50, "timestamp": None, "market_status": "정규"
 }
 
-=======
->>>>>>> 49c38d129535dfadd75be355bb3b5e30ec8b86c0
 KR_STOCKS = {
     "005930": "삼성전자",
     "000660": "SK하이닉스",
@@ -82,6 +71,7 @@ def get_kr_market_status():
             return "장외"
     except:
         return "정규"
+
 def get_us_market_status():
     try:
         us_tz = pytz.timezone('America/New_York')
@@ -101,7 +91,6 @@ def get_us_market_status():
     except:
         return "정규"
 
-        
 def get_macro():
     result = {}
     for ticker, name in MACRO_TICKERS.items():
@@ -110,14 +99,7 @@ def get_macro():
             info = t.fast_info
             price = info.last_price
             prev = info.previous_close
-<<<<<<< HEAD
             change_pct = ((price - prev) / prev) * 100 if prev and prev != 0 else 0
-=======
-            if prev and prev != 0:
-                change_pct = ((price - prev) / prev) * 100
-            else:
-                change_pct = 0
->>>>>>> 49c38d129535dfadd75be355bb3b5e30ec8b86c0
             result[ticker] = {
                 "name": name,
                 "price": round(price, 2),
@@ -189,15 +171,10 @@ def get_kr_stock_kis(ticker):
     try:
         token = get_kis_token()
         if not token:
-<<<<<<< HEAD
             result = get_kr_stock_yf(ticker)
             if result:
                 result["market_status"] = market_status
             return result
-
-=======
-            return get_kr_stock_yf(ticker)
->>>>>>> 49c38d129535dfadd75be355bb3b5e30ec8b86c0
         url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price"
         headers = {
             "authorization": f"Bearer {token}",
@@ -211,8 +188,6 @@ def get_kr_stock_kis(ticker):
         price = float(data.get("stck_prpr", 0))
         change = float(data.get("prdy_vrss", 0))
         change_pct = float(data.get("prdy_ctrt", 0))
-
-        # 시간외 단일가 조회 시도
         if market_status == "시간외단일가":
             try:
                 headers2 = {**headers, "tr_id": "FHKST01010400"}
@@ -225,7 +200,6 @@ def get_kr_stock_kis(ticker):
                     change_pct = float(data2.get("ovtm_untp_prdy_ctrt", 0) or 0)
             except:
                 pass
-
         return {
             "ticker": ticker,
             "name": KR_STOCKS.get(ticker, ticker),
@@ -238,14 +212,10 @@ def get_kr_stock_kis(ticker):
             "updated": datetime.now().isoformat(),
         }
     except:
-<<<<<<< HEAD
         result = get_kr_stock_yf(ticker)
         if result:
             result["market_status"] = market_status
         return result
-=======
-        return get_kr_stock_yf(ticker)
->>>>>>> 49c38d129535dfadd75be355bb3b5e30ec8b86c0
 
 def get_kr_stock_yf(ticker):
     try:
@@ -263,10 +233,7 @@ def get_kr_stock_yf(ticker):
             "change_pct": round(change_pct, 2),
             "currency": "KRW",
             "source": "yfinance",
-<<<<<<< HEAD
             "market_status": get_kr_market_status(),
-=======
->>>>>>> 49c38d129535dfadd75be355bb3b5e30ec8b86c0
             "updated": datetime.now().isoformat(),
         }
     except Exception as e:
@@ -288,12 +255,12 @@ def get_us_stock(ticker):
             "change_pct": round(change_pct, 2),
             "currency": "USD",
             "source": "yfinance",
+            "market_status": get_us_market_status(),
             "updated": datetime.now().isoformat(),
         }
     except Exception as e:
         return {"ticker": ticker, "name": US_STOCKS.get(ticker, ticker), "error": str(e)}
 
-<<<<<<< HEAD
 def analyze_news_keywords(news_list):
     text = " ".join(news_list).lower()
     bad_keywords = {
@@ -318,34 +285,25 @@ def analyze_news_keywords(news_list):
 def get_sniper_scenario(fear_greed, discount, triggered):
     if fear_greed >= 70 or discount >= 0.10:
         kw = ", ".join(triggered[:3]) if triggered else "시장 공황"
-        return f"보스, 지옥문이 열리기 직전입니다. 3차 지하벙커까지 전력을 분산하십시오. 감지된 악재: {kw}"
+        return f"지옥문이 열리기 직전입니다. 3차 지하벙커까지 전력을 분산하십시오. 감지된 악재: {kw}"
     elif fear_greed >= 50 or discount >= 0.05:
-        return "보스, 전선이 흔들리고 있습니다. 1차 타점 소량 진입 후 추가 하락을 대기하십시오."
+        return "전선이 흔들리고 있습니다. 1차 타점 소량 진입 후 추가 하락을 대기하십시오."
     elif fear_greed >= 30:
-        return "보스, 안개가 짙습니다. 분할 매수 전략을 유지하며 신호를 기다리십시오."
+        return "안개가 짙습니다. 분할 매수 전략을 유지하며 신호를 기다리십시오."
     else:
-        return "보스, 탐욕 구간 진입이 감지됩니다. 추격 매수는 금물. 눌림목에서 저격하십시오."
+        return "탐욕 구간 진입이 감지됩니다. 추격 매수는 금물. 눌림목에서 저격하십시오."
 
 async def background_updater():
     while True:
         try:
             _cache["market_status"] = get_kr_market_status()
-=======
-async def background_updater():
-    while True:
-        try:
->>>>>>> 49c38d129535dfadd75be355bb3b5e30ec8b86c0
             _cache["kr"] = [get_kr_stock_kis(t) for t in KR_STOCKS]
             _cache["us"] = [get_us_stock(t) for t in US_STOCKS]
             _cache["macro"] = get_macro()
             _cache["news"] = get_news()
             _cache["fear_greed"] = get_fear_greed()
             _cache["timestamp"] = datetime.now().isoformat()
-<<<<<<< HEAD
             print(f"✅ {_cache['timestamp']} | 시장: {_cache['market_status']}")
-=======
-            print(f"✅ 캐시 업데이트: {_cache['timestamp']}")
->>>>>>> 49c38d129535dfadd75be355bb3b5e30ec8b86c0
         except Exception as e:
             print(f"업데이트 오류: {e}")
         await asyncio.sleep(5)
@@ -356,10 +314,6 @@ async def lifespan(app):
     yield
 
 app = FastAPI(lifespan=lifespan)
-<<<<<<< HEAD
-=======
-
->>>>>>> 49c38d129535dfadd75be355bb3b5e30ec8b86c0
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -424,27 +378,16 @@ def get_recommend(ticker: str):
         stock = yf.Ticker(yf_ticker)
         df = stock.history(period="5d", interval="1d")
         price = float(df["Close"].iloc[-1])
-
         news_list = _cache.get("news", [])
-<<<<<<< HEAD
         fear_greed_score = _cache.get("fear_greed", 50)
         macro = _cache.get("macro", {})
         vix = macro.get("^VIX", {}).get("price", 0)
-
         discount, triggered = analyze_news_keywords(news_list)
         if vix > 30:
             discount = min(discount + 0.05, 0.15)
         elif vix > 20:
             discount = min(discount + 0.02, 0.15)
-
         scenario = get_sniper_scenario(fear_greed_score, discount, triggered)
-
-=======
-        news_text = " ".join(news_list).lower()
-        bad_keywords = ["war", "sanction", "ban", "crash", "crisis", "rate hike", "전쟁", "규제", "금리"]
-        is_bad = any(k in news_text for k in bad_keywords)
-        discount = 0.10 if is_bad else 0.0
->>>>>>> 49c38d129535dfadd75be355bb3b5e30ec8b86c0
         return {
             "ticker": ticker,
             "current": price,
@@ -453,14 +396,10 @@ def get_recommend(ticker: str):
             "buy3": round(price * (0.88 - discount), 2),
             "sell": round(price * 1.08, 2),
             "stop_loss": round(price * 0.85, 2),
-<<<<<<< HEAD
             "is_bad_news": discount > 0.02,
             "discount_pct": round(discount * 100, 1),
             "triggered_keywords": triggered[:5],
             "scenario": scenario,
-=======
-            "is_bad_news": is_bad,
->>>>>>> 49c38d129535dfadd75be355bb3b5e30ec8b86c0
             "currency": "KRW" if ticker in KR_STOCKS else "USD",
         }
     except Exception as e:
