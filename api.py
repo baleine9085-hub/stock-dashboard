@@ -78,13 +78,16 @@ STOCK_NAME_MAP = {
 
 def load_krx_stock_list():
     try:
-        url = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13"
-        df = pd.read_html(url, header=0)[0]
+        from pykrx import stock
+        today = datetime.now().strftime("%Y%m%d")
+        tickers = stock.get_market_ticker_list(today, market="ALL")
         result = {}
-        for _, row in df.iterrows():
-            name = str(row["회사명"]).strip().lower()
-            code = str(row["종목코드"]).zfill(6)
-            result[name] = code
+        for ticker in tickers:
+            try:
+                name = stock.get_market_ticker_name(ticker).lower()
+                result[name] = ticker
+            except:
+                pass
         print(f"✅ KRX 종목 {len(result)}개 로드 완료")
         return result
     except Exception as e:
@@ -563,10 +566,8 @@ def get_recommend(ticker: str):
 def search_stock(query: str):
     try:
         q = query.strip().lower()
-        # 1. STOCK_NAME_MAP 체크 (미장 한글/영문)
         if q in STOCK_NAME_MAP:
             ticker = STOCK_NAME_MAP[q]
-        # 2. KRX 전체 종목 체크 (국장 한글)
         elif q in _cache["krx_map"]:
             ticker = _cache["krx_map"][q]
         else:
