@@ -16,9 +16,9 @@ KIS_ACCOUNT_NO = os.environ.get("KIS_ACCOUNT_NO", "")
 _cache = {
     "kr": [], "us": [], "macro": {}, "news": [],
     "fear_greed": 50, "timestamp": None, "market_status": "정규",
-    "recommendations": {},  # ticker -> {data, timestamp, is_emergency}
-    "price_history": {},    # ticker -> [price, price, ...] 최근 5분
-    "macro_history": {},    # ticker -> [price, price, ...] 최근 5분
+    "recommendations": {},
+    "price_history": {},
+    "macro_history": {},
 }
 
 KR_STOCKS = {
@@ -56,6 +56,23 @@ EMERGENCY_KEYWORDS = [
     "금리 결정", "rate decision", "폭발", "explosion", "긴급", "emergency",
     "디폴트", "default", "파산", "bankruptcy"
 ]
+
+STOCK_NAME_MAP = {
+    "애플": "AAPL", "apple": "AAPL",
+    "테슬라": "TSLA", "tesla": "TSLA",
+    "엔비디아": "NVDA", "nvidia": "NVDA",
+    "마이크로소프트": "MSFT", "microsoft": "MSFT",
+    "구글": "GOOGL", "google": "GOOGL",
+    "아마존": "AMZN", "amazon": "AMZN",
+    "메타": "META", "meta": "META",
+    "삼성전자": "005930", "삼성": "005930",
+    "sk하이닉스": "000660", "하이닉스": "000660",
+    "카카오": "035720",
+    "네이버": "035420", "naver": "035420",
+    "현대차": "005380",
+    "기아": "000270",
+    "한화솔루션": "009830",
+}
 
 def get_kr_market_status():
     try:
@@ -185,7 +202,7 @@ def update_price_history(ticker, price):
         _cache["price_history"][ticker] = []
     history = _cache["price_history"][ticker]
     history.append(price)
-    if len(history) > 60:  # 5분 * 12 (5초 간격) = 60개
+    if len(history) > 60:
         history.pop(0)
 
 _kis_token = None
@@ -355,12 +372,10 @@ def calculate_recommendation(ticker, is_emergency=False, emergency_reason=None):
         price = float(df["Close"].dropna().iloc[-1])
         if price != price:
             return None
-
         news_list = _cache.get("news", [])
         fear_greed_score = _cache.get("fear_greed", 50)
         macro = _cache.get("macro", {})
         vix = macro.get("^VIX", {}).get("price", 0)
-
         discount, triggered = analyze_news_keywords(news_list)
         if is_emergency:
             discount = min(discount + 0.05, 0.20)
@@ -368,9 +383,7 @@ def calculate_recommendation(ticker, is_emergency=False, emergency_reason=None):
             discount = min(discount + 0.05, 0.20)
         elif vix > 20:
             discount = min(discount + 0.02, 0.20)
-
         scenario = get_sniper_scenario(fear_greed_score, discount, triggered, is_emergency, emergency_reason)
-
         return {
             "ticker": ticker,
             "current": price,
@@ -406,23 +419,19 @@ async def background_updater():
             _cache["fear_greed"] = get_fear_greed()
             _cache["timestamp"] = datetime.now().isoformat()
 
-            # 긴급 트리거 체크
             is_emergency = False
             emergency_reason = None
 
-            # 뉴스 긴급 체크
             news_emergency, news_kw = check_emergency_news(_cache["news"])
             if news_emergency:
                 is_emergency = True
                 emergency_reason = f"긴급 뉴스 감지: {news_kw}"
 
-            # 지수 급락 체크
             macro_emergency, macro_reason = check_macro_emergency()
             if macro_emergency:
                 is_emergency = True
                 emergency_reason = macro_reason
 
-            # 종목 급변 체크
             all_stocks = _cache["kr"] + _cache["us"]
             for stock in all_stocks:
                 if not stock or "error" in stock:
@@ -435,7 +444,6 @@ async def background_updater():
                         is_emergency = True
                         emergency_reason = f"{stock.get('name', ticker)} {price_change:+.1f}% 급변"
 
-            # 전략 업데이트: 긴급이면 즉시, 아니면 1시간마다
             now = datetime.now()
             should_update = (
                 is_emergency or
@@ -525,10 +533,8 @@ def get_chart(ticker: str):
 
 @app.get("/api/recommend/{ticker}")
 def get_recommend(ticker: str):
-    # 캐시에 있으면 캐시 반환
     if ticker in _cache["recommendations"]:
         return _cache["recommendations"][ticker]
-    # 없으면 즉시 계산
     rec = calculate_recommendation(ticker)
     if rec:
         _cache["recommendations"][ticker] = rec
@@ -538,12 +544,26 @@ def get_recommend(ticker: str):
 @app.get("/api/search/{query}")
 def search_stock(query: str):
     try:
-        ticker = query.upper().strip()
+        q = query.strip().lower()
+        if q in STOCK_NAME_MAP:
+            ticker = STOCK_NAME_MAP[q]
+        else:
+            ticker = query.upper().strip()
+
         yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
         stock = yf.Ticker(yf_ticker)
-        info = stock.fast_info
-        price = info.last_price
-        prev = info.previous_close
+
+        try:
+            info = stock.fast_info
+            price = float(info.last_price) if info.last_price else 0
+            prev = float(info.previous_close) if info.previous_close else 0
+        except:
+            df = stock.history(period="5d", interval="1d")
+            if df is None or len(df) == 0:
+                return {"error": f"'{query}' 종목을 찾을 수 없습니다"}
+            price = float(df["Close"].dropna().iloc[-1])
+            prev = float(df["Close"].dropna().iloc[-2]) if len(df) > 1 else price
+
         change = price - prev
         change_pct = (change / prev) * 100 if prev else 0
         rec = calculate_recommendation(ticker)
@@ -556,7 +576,7 @@ def search_stock(query: str):
             "recommendation": rec,
         }
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"검색 실패: {str(e)}"}
 
 @app.websocket("/ws/stocks")
 async def websocket_stocks(websocket: WebSocket):
