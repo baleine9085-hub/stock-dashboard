@@ -4,6 +4,7 @@ import yfinance as yf
 import asyncio
 import json
 import requests
+import pandas as pd
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 import os
@@ -19,6 +20,7 @@ _cache = {
     "recommendations": {},
     "price_history": {},
     "macro_history": {},
+    "krx_map": {},
 }
 
 KR_STOCKS = {
@@ -73,6 +75,21 @@ STOCK_NAME_MAP = {
     "기아": "000270",
     "한화솔루션": "009830",
 }
+
+def load_krx_stock_list():
+    try:
+        url = "https://kind.krx.co.kr/corpgeneral/corpList.do?method=download&searchType=13"
+        df = pd.read_html(url, header=0)[0]
+        result = {}
+        for _, row in df.iterrows():
+            name = str(row["회사명"]).strip().lower()
+            code = str(row["종목코드"]).zfill(6)
+            result[name] = code
+        print(f"✅ KRX 종목 {len(result)}개 로드 완료")
+        return result
+    except Exception as e:
+        print(f"KRX 로드 실패: {e}")
+        return {}
 
 def get_kr_market_status():
     try:
@@ -470,6 +487,7 @@ async def background_updater():
 
 @asynccontextmanager
 async def lifespan(app):
+    _cache["krx_map"] = load_krx_stock_list()
     asyncio.create_task(background_updater())
     yield
 
@@ -545,8 +563,12 @@ def get_recommend(ticker: str):
 def search_stock(query: str):
     try:
         q = query.strip().lower()
+        # 1. STOCK_NAME_MAP 체크 (미장 한글/영문)
         if q in STOCK_NAME_MAP:
             ticker = STOCK_NAME_MAP[q]
+        # 2. KRX 전체 종목 체크 (국장 한글)
+        elif q in _cache["krx_map"]:
+            ticker = _cache["krx_map"][q]
         else:
             ticker = query.upper().strip()
 
