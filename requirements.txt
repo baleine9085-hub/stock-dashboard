@@ -11,3 +11,4 @@ google-generativeai
 plotly
 streamlit
 pytz
+lxml
