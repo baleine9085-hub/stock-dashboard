@@ -15,7 +15,10 @@ KIS_ACCOUNT_NO = os.environ.get("KIS_ACCOUNT_NO", "")
 
 _cache = {
     "kr": [], "us": [], "macro": {}, "news": [],
-    "fear_greed": 50, "timestamp": None, "market_status": "정규"
+    "fear_greed": 50, "timestamp": None, "market_status": "정규",
+    "recommendations": {},  # ticker -> {data, timestamp, is_emergency}
+    "price_history": {},    # ticker -> [price, price, ...] 최근 5분
+    "macro_history": {},    # ticker -> [price, price, ...] 최근 5분
 }
 
 KR_STOCKS = {
@@ -24,7 +27,6 @@ KR_STOCKS = {
     "035420": "NAVER",
     "005380": "현대차",
     "009830": "한화솔루션",
-    "461030": "뉴로메카",
 }
 
 US_STOCKS = {
@@ -48,6 +50,12 @@ MACRO_TICKERS = {
     "^VIX": "VIX",
     "DX-Y.NYB": "달러인덱스",
 }
+
+EMERGENCY_KEYWORDS = [
+    "속보", "breaking", "폭락", "crash", "급락", "전쟁", "war",
+    "금리 결정", "rate decision", "폭발", "explosion", "긴급", "emergency",
+    "디폴트", "default", "파산", "bankruptcy"
+]
 
 def get_kr_market_status():
     try:
@@ -141,6 +149,45 @@ def get_news():
         print(f"뉴스 오류: {e}")
         return ["뉴스 연결 중...", "잠시 후 자동 업데이트됩니다"]
 
+def check_emergency_news(news_list):
+    text = " ".join(news_list).lower()
+    for kw in EMERGENCY_KEYWORDS:
+        if kw.lower() in text:
+            return True, kw
+    return False, None
+
+def check_price_emergency(ticker, current_price):
+    history = _cache["price_history"].get(ticker, [])
+    if len(history) < 2:
+        return False, 0
+    oldest = history[0]
+    if oldest == 0:
+        return False, 0
+    change_pct = ((current_price - oldest) / oldest) * 100
+    if abs(change_pct) >= 3:
+        return True, round(change_pct, 2)
+    return False, round(change_pct, 2)
+
+def check_macro_emergency():
+    macro = _cache.get("macro", {})
+    ixic = macro.get("^IXIC", {})
+    ks11 = macro.get("^KS11", {})
+    ixic_change = ixic.get("change_pct", 0)
+    ks11_change = ks11.get("change_pct", 0)
+    if ixic_change <= -1.0:
+        return True, f"나스닥 {ixic_change}% 급락"
+    if ks11_change <= -1.0:
+        return True, f"코스피 {ks11_change}% 급락"
+    return False, None
+
+def update_price_history(ticker, price):
+    if ticker not in _cache["price_history"]:
+        _cache["price_history"][ticker] = []
+    history = _cache["price_history"][ticker]
+    history.append(price)
+    if len(history) > 60:  # 5분 * 12 (5초 간격) = 60개
+        history.pop(0)
+
 _kis_token = None
 _kis_token_expires = None
 
@@ -200,6 +247,7 @@ def get_kr_stock_kis(ticker):
                     change_pct = float(data2.get("ovtm_untp_prdy_ctrt", 0) or 0)
             except:
                 pass
+        update_price_history(ticker, price)
         return {
             "ticker": ticker,
             "name": KR_STOCKS.get(ticker, ticker),
@@ -225,6 +273,7 @@ def get_kr_stock_yf(ticker):
         prev = info.previous_close
         change = price - prev
         change_pct = (change / prev) * 100 if prev else 0
+        update_price_history(ticker, price)
         return {
             "ticker": ticker,
             "name": KR_STOCKS.get(ticker, ticker),
@@ -247,6 +296,7 @@ def get_us_stock(ticker):
         prev_close = info.previous_close
         change = price - prev_close
         change_pct = (change / prev_close) * 100
+        update_price_history(ticker, price)
         return {
             "ticker": ticker,
             "name": US_STOCKS.get(ticker, ticker),
@@ -282,7 +332,9 @@ def analyze_news_keywords(news_list):
             triggered.append(keyword)
     return min(discount, 0.15), triggered
 
-def get_sniper_scenario(fear_greed, discount, triggered):
+def get_sniper_scenario(fear_greed, discount, triggered, is_emergency=False, emergency_reason=None):
+    if is_emergency and emergency_reason:
+        return f"🚨 긴급 상황입니다. {emergency_reason}. 3차 벙커 타점을 즉시 하향 조정합니다. 대기하십시오."
     if fear_greed >= 70 or discount >= 0.10:
         kw = ", ".join(triggered[:3]) if triggered else "시장 공황"
         return f"지옥문이 열리기 직전입니다. 3차 지하벙커까지 전력을 분산하십시오. 감지된 악재: {kw}"
@@ -293,7 +345,57 @@ def get_sniper_scenario(fear_greed, discount, triggered):
     else:
         return "탐욕 구간 진입이 감지됩니다. 추격 매수는 금물. 눌림목에서 저격하십시오."
 
+def calculate_recommendation(ticker, is_emergency=False, emergency_reason=None):
+    try:
+        yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
+        stock = yf.Ticker(yf_ticker)
+        df = stock.history(period="1mo", interval="1d")
+        if df is None or len(df) == 0:
+            return None
+        price = float(df["Close"].dropna().iloc[-1])
+        if price != price:
+            return None
+
+        news_list = _cache.get("news", [])
+        fear_greed_score = _cache.get("fear_greed", 50)
+        macro = _cache.get("macro", {})
+        vix = macro.get("^VIX", {}).get("price", 0)
+
+        discount, triggered = analyze_news_keywords(news_list)
+        if is_emergency:
+            discount = min(discount + 0.05, 0.20)
+        if vix > 30:
+            discount = min(discount + 0.05, 0.20)
+        elif vix > 20:
+            discount = min(discount + 0.02, 0.20)
+
+        scenario = get_sniper_scenario(fear_greed_score, discount, triggered, is_emergency, emergency_reason)
+
+        return {
+            "ticker": ticker,
+            "current": price,
+            "buy1": round(price * (0.97 - discount), 2),
+            "buy2": round(price * (0.93 - discount), 2),
+            "buy3": round(price * (0.88 - discount), 2),
+            "sell": round(price * 1.08, 2),
+            "stop_loss": round(price * 0.85, 2),
+            "is_bad_news": discount > 0.02,
+            "discount_pct": round(discount * 100, 1),
+            "triggered_keywords": triggered[:5],
+            "scenario": scenario,
+            "is_emergency": is_emergency,
+            "emergency_reason": emergency_reason,
+            "currency": "KRW" if len(ticker) == 6 and ticker.isdigit() else "USD",
+            "updated_at": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        print(f"추천 계산 오류 {ticker}: {e}")
+        return None
+
+_last_strategy_update = None
+
 async def background_updater():
+    global _last_strategy_update
     while True:
         try:
             _cache["market_status"] = get_kr_market_status()
@@ -303,6 +405,56 @@ async def background_updater():
             _cache["news"] = get_news()
             _cache["fear_greed"] = get_fear_greed()
             _cache["timestamp"] = datetime.now().isoformat()
+
+            # 긴급 트리거 체크
+            is_emergency = False
+            emergency_reason = None
+
+            # 뉴스 긴급 체크
+            news_emergency, news_kw = check_emergency_news(_cache["news"])
+            if news_emergency:
+                is_emergency = True
+                emergency_reason = f"긴급 뉴스 감지: {news_kw}"
+
+            # 지수 급락 체크
+            macro_emergency, macro_reason = check_macro_emergency()
+            if macro_emergency:
+                is_emergency = True
+                emergency_reason = macro_reason
+
+            # 종목 급변 체크
+            all_stocks = _cache["kr"] + _cache["us"]
+            for stock in all_stocks:
+                if not stock or "error" in stock:
+                    continue
+                ticker = stock.get("ticker")
+                price = stock.get("price", 0)
+                if price:
+                    price_emergency, price_change = check_price_emergency(ticker, price)
+                    if price_emergency:
+                        is_emergency = True
+                        emergency_reason = f"{stock.get('name', ticker)} {price_change:+.1f}% 급변"
+
+            # 전략 업데이트: 긴급이면 즉시, 아니면 1시간마다
+            now = datetime.now()
+            should_update = (
+                is_emergency or
+                _last_strategy_update is None or
+                (now - _last_strategy_update).seconds >= 3600
+            )
+
+            if should_update:
+                all_tickers = list(KR_STOCKS.keys()) + list(US_STOCKS.keys())
+                for ticker in all_tickers:
+                    rec = calculate_recommendation(ticker, is_emergency, emergency_reason)
+                    if rec:
+                        _cache["recommendations"][ticker] = rec
+                _last_strategy_update = now
+                update_type = "🚨 긴급" if is_emergency else "📊 정기"
+                print(f"{update_type} 전략 업데이트 완료: {now.isoformat()}")
+
+            _cache["is_emergency"] = is_emergency
+            _cache["emergency_reason"] = emergency_reason
             print(f"✅ {_cache['timestamp']} | 시장: {_cache['market_status']}")
         except Exception as e:
             print(f"업데이트 오류: {e}")
@@ -373,38 +525,35 @@ def get_chart(ticker: str):
 
 @app.get("/api/recommend/{ticker}")
 def get_recommend(ticker: str):
+    # 캐시에 있으면 캐시 반환
+    if ticker in _cache["recommendations"]:
+        return _cache["recommendations"][ticker]
+    # 없으면 즉시 계산
+    rec = calculate_recommendation(ticker)
+    if rec:
+        _cache["recommendations"][ticker] = rec
+        return rec
+    return {"error": "계산 실패"}
+
+@app.get("/api/search/{query}")
+def search_stock(query: str):
     try:
+        ticker = query.upper().strip()
         yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
         stock = yf.Ticker(yf_ticker)
-        df = stock.history(period="1mo", interval="1d")
-        if df is None or len(df) == 0:
-            return {"error": "데이터 없음"}
-        price = float(df["Close"].dropna().iloc[-1])
-        if price != price:  # nan 체크
-            return {"error": "가격 데이터 없음"}
-        news_list = _cache.get("news", [])
-        fear_greed_score = _cache.get("fear_greed", 50)
-        macro = _cache.get("macro", {})
-        vix = macro.get("^VIX", {}).get("price", 0)
-        discount, triggered = analyze_news_keywords(news_list)
-        if vix > 30:
-            discount = min(discount + 0.05, 0.15)
-        elif vix > 20:
-            discount = min(discount + 0.02, 0.15)
-        scenario = get_sniper_scenario(fear_greed_score, discount, triggered)
+        info = stock.fast_info
+        price = info.last_price
+        prev = info.previous_close
+        change = price - prev
+        change_pct = (change / prev) * 100 if prev else 0
+        rec = calculate_recommendation(ticker)
         return {
             "ticker": ticker,
-            "current": price,
-            "buy1": round(price * (0.97 - discount), 2),
-            "buy2": round(price * (0.93 - discount), 2),
-            "buy3": round(price * (0.88 - discount), 2),
-            "sell": round(price * 1.08, 2),
-            "stop_loss": round(price * 0.85, 2),
-            "is_bad_news": discount > 0.02,
-            "discount_pct": round(discount * 100, 1),
-            "triggered_keywords": triggered[:5],
-            "scenario": scenario,
+            "price": round(price, 2),
+            "change": round(change, 2),
+            "change_pct": round(change_pct, 2),
             "currency": "KRW" if len(ticker) == 6 and ticker.isdigit() else "USD",
+            "recommendation": rec,
         }
     except Exception as e:
         return {"error": str(e)}
@@ -421,6 +570,9 @@ async def websocket_stocks(websocket: WebSocket):
                 "news": _cache["news"],
                 "fear_greed": _cache["fear_greed"],
                 "market_status": _cache["market_status"],
+                "is_emergency": _cache.get("is_emergency", False),
+                "emergency_reason": _cache.get("emergency_reason", None),
+                "recommendations": _cache["recommendations"],
                 "timestamp": datetime.now().isoformat(),
             }
             await websocket.send_text(json.dumps(data))
