@@ -106,33 +106,120 @@ STOCK_NAME_MAP = {
     "한화시스템": "272210",
 }
 
-# ── 감성 분석 키워드 ──────────────────────────────────────────
-POSITIVE_KEYWORDS = {
-    "rally": 2, "surge": 2, "soar": 2, "jump": 1, "rise": 1,
-    "beat": 2, "upgrade": 2, "bullish": 2, "growth": 1, "profit": 1,
-    "record": 1, "strong": 1, "gain": 1, "recovery": 1, "optimism": 1,
-    "breakthrough": 2, "outperform": 2, "boom": 2, "expand": 1,
-    "상승": 2, "급등": 2, "호실적": 2, "매수": 1, "강세": 2,
-    "반등": 2, "돌파": 2, "성장": 1, "흑자": 2, "수혜": 1,
-    "호조": 2, "긍정": 1, "기대": 1, "상향": 2,
+# ── 극단적 감성 키워드 (중립 제거, 자극적 키워드 5배 가중치) ──
+EXTREME_POSITIVE = {
+    # 5배 가중치 (극단적 긍정)
+    "record high": 10, "all-time high": 10, "최고치": 10, "역대 최고": 10,
+    "breakthrough": 10, "혁신적 돌파": 10, "급등": 10, "폭등": 10,
+    "surge": 10, "soar": 10, "skyrocket": 10, "moon": 8,
+    "massive rally": 10, "historic rally": 10, "강세 전환": 8,
+    "beat expectations": 8, "실적 서프라이즈": 10, "어닝서프라이즈": 10,
+    # 3배 가중치
+    "rally": 6, "jump": 6, "rise": 4, "gain": 4, "upgrade": 6,
+    "bullish": 6, "growth": 4, "profit": 4, "recovery": 6,
+    "outperform": 6, "boom": 6, "상승": 4, "강세": 6,
+    "반등": 6, "수혜": 4, "호조": 6, "흑자": 6, "매수": 4,
 }
 
-NEGATIVE_KEYWORDS = {
-    "crash": 3, "plunge": 3, "collapse": 3, "fall": 1, "drop": 1,
-    "miss": 2, "downgrade": 2, "bearish": 2, "loss": 2, "decline": 1,
-    "recession": 3, "default": 3, "bankruptcy": 3, "crisis": 2,
-    "fear": 1, "risk": 1, "warning": 2, "tariff": 2, "sanction": 2,
-    "inflation": 1, "downfall": 2, "slump": 2, "weak": 1,
-    "하락": 2, "급락": 3, "폭락": 3, "매도": 1, "약세": 2,
-    "부진": 2, "적자": 2, "위기": 2, "불안": 1, "경고": 2,
-    "관세": 2, "제재": 2, "침체": 3, "파산": 3, "규제": 1,
+EXTREME_NEGATIVE = {
+    # 5배 가중치 (극단적 부정)
+    "war": 10, "전쟁": 10, "missile": 10, "미사일": 10,
+    "crash": 10, "폭락": 10, "collapse": 10, "붕괴": 10,
+    "bankruptcy": 10, "파산": 10, "default": 10, "디폴트": 10,
+    "supply chain collapse": 10, "공급망 붕괴": 10,
+    "nuclear": 10, "핵": 8, "sanctions": 8, "제재": 8,
+    "recession": 10, "침체": 10, "depression": 10,
+    "급락": 10, "plunge": 10, "freefall": 10,
+    "circuit breaker": 10, "서킷브레이커": 10,
+    "tariff war": 10, "무역전쟁": 10,
+    # 3배 가중치
+    "crisis": 6, "위기": 6, "fall": 4, "drop": 4,
+    "downgrade": 6, "bearish": 6, "loss": 6, "decline": 4,
+    "warning": 6, "tariff": 6, "관세": 6, "inflation": 4,
+    "하락": 4, "약세": 6, "부진": 6, "적자": 6,
+    "불안": 4, "경고": 6, "규제": 4,
 }
+
+def get_reddit_wsb_sentiment():
+    """Reddit r/wallstreetbets 실시간 감성 (무인증 공개 API)"""
+    try:
+        headers = {"User-Agent": "AI-Stock-Terminal/1.0"}
+        res = requests.get(
+            "https://www.reddit.com/r/wallstreetbets/hot.json?limit=15",
+            headers=headers, timeout=6
+        )
+        data = res.json()
+        posts = data.get("data", {}).get("children", [])
+        if not posts:
+            return 50, []
+
+        pos = 0
+        neg = 0
+        found_kw = []
+
+        for post in posts:
+            title = post.get("data", {}).get("title", "").lower()
+            score_val = post.get("data", {}).get("score", 0) or 0
+            # 업보트 가중: 핫한 글일수록 더 큰 영향
+            weight = min(max(score_val / 1000, 0.5), 3.0)
+
+            for kw, w in EXTREME_POSITIVE.items():
+                if kw.lower() in title:
+                    pos += w * weight
+                    found_kw.append(f"WSB↑{kw}")
+            for kw, w in EXTREME_NEGATIVE.items():
+                if kw.lower() in title:
+                    neg += w * weight
+                    found_kw.append(f"WSB↓{kw}")
+
+        total = pos + neg
+        if total == 0:
+            # WSB 감성 없으면 중간값 반환
+            return 50, []
+        score = round(pos / total * 100)
+        return score, found_kw[:4]
+    except Exception as e:
+        print(f"Reddit 감성 오류: {e}")
+        return 50, []
+
+def get_decisive_reason(news_list, pos_kw_found, neg_kw_found):
+    """가장 임팩트 있는 헤드라인 1줄 추출"""
+    try:
+        best_headline = ""
+        best_score = 0
+        all_extreme = list(EXTREME_NEGATIVE.keys())[:20] + list(EXTREME_POSITIVE.keys())[:20]
+
+        for headline in news_list[:10]:
+            h_lower = headline.lower()
+            score = 0
+            for kw in all_extreme:
+                if kw.lower() in h_lower:
+                    score += 1
+            if score > best_score:
+                best_score = score
+                best_headline = headline
+
+        if not best_headline and news_list:
+            best_headline = news_list[0]
+
+        # 결정적 키워드 요약
+        if neg_kw_found:
+            reason = f"'{neg_kw_found[0]}' 관련 악재 헤드라인 감지 → 부정 심리 우세"
+        elif pos_kw_found:
+            reason = f"'{pos_kw_found[0]}' 관련 호재 헤드라인 감지 → 긍정 심리 우세"
+        else:
+            reason = best_headline[:60] if best_headline else "뉴스 분석 중"
+
+        return reason
+    except:
+        return "뉴스 분석 중"
 
 def get_news_sentiment(news_list=None):
-    """뉴스 리스트를 감성 분석해 점수/비율/키워드 반환"""
+    """극단화 감성 분석 — 중립 구간(45~55) 강제 탈출 + VIX 연동 + Reddit 30% 반영"""
     try:
         if news_list is None:
             news_list = _cache.get("news", [])
+
         text = " ".join(news_list).lower()
 
         pos_score = 0
@@ -140,68 +227,127 @@ def get_news_sentiment(news_list=None):
         pos_found = []
         neg_found = []
 
-        for kw, weight in POSITIVE_KEYWORDS.items():
+        # ── 뉴스 키워드 점수 ──
+        for kw, weight in EXTREME_POSITIVE.items():
             if kw.lower() in text:
                 pos_score += weight
                 pos_found.append(kw)
 
-        for kw, weight in NEGATIVE_KEYWORDS.items():
+        for kw, weight in EXTREME_NEGATIVE.items():
             if kw.lower() in text:
                 neg_score += weight
                 neg_found.append(kw)
 
-        total = pos_score + neg_score
-        if total == 0:
-            pos_ratio = 50
-            neg_ratio = 50
+        news_total = pos_score + neg_score
+        if news_total == 0:
+            news_base = 50
         else:
-            pos_ratio = round(pos_score / total * 100)
-            neg_ratio = 100 - pos_ratio
+            news_base = round(pos_score / news_total * 100)
 
-        # 종합 심리 점수 (0~100, 높을수록 긍정)
-        sentiment_score = pos_ratio
+        # ── Reddit WSB 감성 30% 반영 ──
+        reddit_score, reddit_kw = get_reddit_wsb_sentiment()
+        combined = round(news_base * 0.7 + reddit_score * 0.3)
 
-        if sentiment_score >= 70:
-            label = "강한 긍정 🚀"
-            color = "#22c55e"
-        elif sentiment_score >= 55:
+        # ── VIX 마이너스 가중치 연동 ──
+        macro = _cache.get("macro", {})
+        vix = macro.get("^VIX", {}).get("price", 20)
+        vix_change = macro.get("^VIX", {}).get("change_pct", 0)
+
+        vix_penalty = 0
+        if vix > 35:
+            vix_penalty = -20
+        elif vix > 25:
+            vix_penalty = -12
+        elif vix > 20:
+            vix_penalty = -6
+        if vix_change > 10:
+            vix_penalty -= 8
+        elif vix_change > 5:
+            vix_penalty -= 4
+
+        combined = max(0, min(100, combined + vix_penalty))
+
+        # ── 중립 구간 강제 탈출 (45~55 → 방향 확정) ──
+        if 45 <= combined <= 55:
+            # 임팩트 키워드 재분석으로 방향 결정
+            extreme_neg_count = sum(1 for kw in ["war", "crash", "bankruptcy", "폭락", "전쟁", "파산", "recession", "침체", "collapse"] if kw in text)
+            extreme_pos_count = sum(1 for kw in ["record high", "breakthrough", "surge", "폭등", "최고치", "급등", "boom"] if kw in text)
+
+            if extreme_neg_count > extreme_pos_count:
+                combined = min(combined - 12, 42)   # 공포 방향
+            elif extreme_pos_count > extreme_neg_count:
+                combined = max(combined + 12, 58)   # 탐욕 방향
+            elif neg_score > pos_score:
+                combined = min(combined - 8, 44)
+            elif pos_score > neg_score:
+                combined = max(combined + 8, 56)
+            elif vix > 20:
+                combined = min(combined - 6, 44)    # VIX 높으면 부정 쪽
+            else:
+                combined = max(combined + 6, 56)    # 안정적이면 긍정 쪽
+
+        # ── 3단계 색상 + 라벨 ──
+        if combined <= 30:
+            label = "극단적 공포 🚨"
+            color = "#dc2626"
+            alert_level = "danger"
+        elif combined <= 40:
+            label = "강한 부정 📉"
+            color = "#ff3b3b"
+            alert_level = "warning"
+        elif combined <= 60:
+            label = "관망 ⚠️"
+            color = "#facc15"
+            alert_level = "caution"
+        elif combined <= 70:
             label = "긍정 📈"
             color = "#84cc16"
-        elif sentiment_score >= 45:
-            label = "중립 😐"
-            color = "#facc15"
-        elif sentiment_score >= 30:
-            label = "부정 📉"
-            color = "#f97316"
+            alert_level = "ok"
         else:
-            label = "강한 부정 🚨"
-            color = "#ff3b3b"
+            label = "극단적 탐욕 🤑"
+            color = "#22c55e"
+            alert_level = "bull"
 
-        is_danger = neg_ratio >= 80
+        neg_ratio = 100 - combined
+        pos_ratio = combined
+        is_danger = neg_ratio >= 70 or combined <= 30
+
+        # ── 결정적 근거 ──
+        decisive_reason = get_decisive_reason(news_list, pos_found, neg_found)
+
+        all_pos_kw = pos_found[:3] + [k.replace("WSB↑","") for k in reddit_kw if "↑" in k][:2]
+        all_neg_kw = neg_found[:3] + [k.replace("WSB↓","") for k in reddit_kw if "↓" in k][:2]
 
         return {
-            "score": sentiment_score,
-            "pos_ratio": pos_ratio,
-            "neg_ratio": neg_ratio,
-            "pos_score": pos_score,
-            "neg_score": neg_score,
-            "pos_keywords": pos_found[:5],
-            "neg_keywords": neg_found[:5],
-            "label": label,
-            "color": color,
-            "is_danger": is_danger,
-            "news_count": len(news_list),
-            "updated_at": datetime.now().isoformat(),
+            "score":          combined,
+            "pos_ratio":      pos_ratio,
+            "neg_ratio":      neg_ratio,
+            "pos_score":      pos_score,
+            "neg_score":      neg_score,
+            "pos_keywords":   list(dict.fromkeys(all_pos_kw))[:5],
+            "neg_keywords":   list(dict.fromkeys(all_neg_kw))[:5],
+            "label":          label,
+            "color":          color,
+            "alert_level":    alert_level,
+            "is_danger":      is_danger,
+            "reddit_score":   reddit_score,
+            "vix_penalty":    vix_penalty,
+            "decisive_reason": decisive_reason,
+            "news_count":     len(news_list),
+            "updated_at":     datetime.now().isoformat(),
         }
     except Exception as e:
         print(f"감성 분석 오류: {e}")
-        return {"score": 50, "pos_ratio": 50, "neg_ratio": 50, "label": "중립 😐", "color": "#facc15", "is_danger": False}
+        return {
+            "score": 40, "pos_ratio": 40, "neg_ratio": 60,
+            "label": "분석 오류", "color": "#facc15",
+            "alert_level": "caution", "is_danger": False,
+            "decisive_reason": "감성 분석 오류",
+        }
 
 def get_sector_flow():
-    """캐시된 주가 데이터로 섹터별 수급(등락률 합산) 순위 계산"""
     try:
         sector_data = {}
-
         all_stocks = _cache.get("kr", []) + _cache.get("us", [])
         for stock in all_stocks:
             if not stock or "error" in stock:
@@ -210,34 +356,22 @@ def get_sector_flow():
             info = SCREENING_UNIVERSE.get(ticker, {})
             sector = info.get("sector", "기타")
             change_pct = stock.get("change_pct", 0) or 0
-
             if sector not in sector_data:
-                sector_data[sector] = {
-                    "sector": sector,
-                    "total_change": 0,
-                    "count": 0,
-                    "stocks": [],
-                }
+                sector_data[sector] = {"sector": sector, "total_change": 0, "count": 0, "stocks": []}
             sector_data[sector]["total_change"] += change_pct
             sector_data[sector]["count"] += 1
             sector_data[sector]["stocks"].append({
-                "ticker": ticker,
-                "name": info.get("name", ticker),
-                "change_pct": round(change_pct, 2),
+                "ticker": ticker, "name": info.get("name", ticker), "change_pct": round(change_pct, 2),
             })
-
         result = []
         for sector, data in sector_data.items():
             count = data["count"]
             avg_change = data["total_change"] / count if count > 0 else 0
             result.append({
-                "sector": sector,
-                "avg_change": round(avg_change, 2),
-                "count": count,
+                "sector": sector, "avg_change": round(avg_change, 2), "count": count,
                 "stocks": sorted(data["stocks"], key=lambda x: x["change_pct"], reverse=True),
                 "flow": "inflow" if avg_change > 0 else "outflow",
             })
-
         result.sort(key=lambda x: x["avg_change"], reverse=True)
         return result
     except Exception as e:
@@ -290,7 +424,6 @@ def calculate_stock_score(ticker):
         volumes = df["Volume"].dropna().tolist()
         current_price = prices[-1]
         score = 0
-
         rsi = calculate_rsi(prices[-30:] if len(prices) >= 30 else prices)
         if 30 <= rsi <= 50: rsi_score = 25
         elif rsi < 30: rsi_score = 22
@@ -298,7 +431,6 @@ def calculate_stock_score(ticker):
         elif 60 < rsi <= 70: rsi_score = 10
         else: rsi_score = 5
         score += rsi_score
-
         momentum = 0
         if len(prices) >= 20:
             momentum = (current_price - prices[-20]) / prices[-20] * 100
@@ -310,7 +442,6 @@ def calculate_stock_score(ticker):
         else:
             mom_score = 12
         score += mom_score
-
         ma50 = 0
         if len(prices) >= 50:
             ma50 = sum(prices[-50:]) / 50
@@ -323,7 +454,6 @@ def calculate_stock_score(ticker):
         else:
             ma_score = 12
         score += ma_score
-
         vol_ratio = 1
         if len(volumes) >= 20:
             avg_vol = sum(volumes[-20:]) / 20
@@ -336,7 +466,6 @@ def calculate_stock_score(ticker):
         else:
             vol_score = 12
         score += vol_score
-
         final_score = min(score, 100)
         if rsi < 40 and ma50 > 0:
             upside = (ma50 - current_price) / current_price * 100 * 1.5
@@ -344,7 +473,6 @@ def calculate_stock_score(ticker):
             upside = -5.0
         else:
             upside = (final_score - 50) * 0.4
-
         return {
             "score": final_score, "rsi": rsi,
             "momentum_1m": round(momentum, 2),
@@ -377,7 +505,6 @@ def generate_stock_analysis(ticker, score_data):
         fear_greed = _cache.get("fear_greed", 50)
         grade = get_grade(score)
         lines = []
-
         if rsi < 35:
             lines.append(f"{name}은(는) RSI {rsi}로 과매도 구간에 진입했습니다. 기술적 반등 가능성이 높으며 단기 저점 매수 기회로 판단됩니다.")
         elif rsi < 50:
@@ -386,7 +513,6 @@ def generate_stock_analysis(ticker, score_data):
             lines.append(f"{name}의 RSI {rsi}는 중립 구간으로, 추세 추종 전략이 적합합니다.")
         else:
             lines.append(f"{name}의 RSI {rsi}는 과매수 구간으로 신규 진입보다 기존 보유자의 비중 관리가 필요합니다.")
-
         if momentum < -8:
             lines.append(f"최근 1개월간 {abs(momentum):.1f}% 조정을 받으며 가격 부담이 해소되었습니다. {sector} 섹터의 구조적 성장성을 고려하면 현 구간은 전략적 매수 타이밍입니다.")
         elif momentum < 0:
@@ -395,14 +521,12 @@ def generate_stock_analysis(ticker, score_data):
             lines.append(f"1개월 수익률 +{momentum:.1f}%로 완만한 상승세를 유지하고 있습니다.")
         else:
             lines.append(f"1개월 수익률 +{momentum:.1f}%로 강한 모멘텀을 보이고 있으나 단기 과열 여부를 점검해야 합니다.")
-
         if vix > 25:
             lines.append(f"VIX {vix:.1f}로 시장 변동성이 확대된 상태입니다. 분할 매수 전략으로 리스크를 분산하며 3차 벙커까지 여유 자금을 확보하십시오.")
         elif fear_greed < 35:
             lines.append(f"CNN 공포지수 {fear_greed}로 극도의 공포 구간입니다. 역발상 투자 관점에서 현 구간은 중장기 저점 매수 구간으로 판단됩니다.")
         else:
             lines.append(f"현재 매크로 환경은 {sector} 섹터에 중립적입니다. 개별 종목 펀더멘털에 집중한 선별적 접근이 필요합니다.")
-
         lines.append(f"종합 AI 점수 {score}점 ({grade}). 목표 업사이드 {upside:+.1f}%.")
         return " ".join(lines)
     except:
@@ -418,7 +542,6 @@ def generate_macro_report():
         gold = macro.get("GC=F", {})
         oil = macro.get("CL=F", {})
         dollar = macro.get("DX-Y.NYB", {})
-
         vix_price = vix.get("price", 20)
         vix_change = vix.get("change_pct", 0)
         gold_change = gold.get("change_pct", 0)
@@ -426,7 +549,6 @@ def generate_macro_report():
         dollar_change = dollar.get("change_pct", 0)
         ixic_change = ixic.get("change_pct", 0)
         ks11_change = ks11.get("change_pct", 0)
-
         if vix_price > 30:
             market_phase = "고변동성 공포 장세"
             summary = f"VIX {vix_price:.1f}로 시장 변동성이 극도로 높은 상태입니다. 투자자들의 위험 회피 심리가 강하며, 안전자산 선호가 두드러지고 있습니다. 역사적으로 VIX 30+ 구간은 중기 저점 형성 구간과 일치합니다."
@@ -439,7 +561,6 @@ def generate_macro_report():
         else:
             market_phase = "저변동성 강세장"
             summary = f"VIX {vix_price:.1f}로 시장 변동성이 매우 낮습니다. 강세장이 지속되고 있으나 과도한 레버리지는 주의가 필요합니다."
-
         if vix_price > 30 and fear_greed < 25:
             pattern = "2020년 3월 COVID 저점"
             pattern_desc = "현재 공포지수와 VIX 수준은 2020년 3월 코로나 저점과 유사합니다. 당시 S&P500은 6개월 내 50% 이상 반등했으며, 역발상 투자자들에게 역사적 매수 기회였습니다."
@@ -452,10 +573,8 @@ def generate_macro_report():
         else:
             pattern = "2019년 금리 인하 사이클"
             pattern_desc = "현재 시장은 2019년 연준 금리 인하 시점과 유사한 흐름을 보입니다. 금, 채권 등 안전자산과 성장주의 혼합 포트폴리오가 유효했던 시기로, 선별적 접근이 중요합니다."
-
         opportunities = []
         risks = []
-
         if gold_change > 0.5:
             opportunities.append(f"금 (GC=F +{gold_change:.1f}%): 안전자산 수요 증가. 달러 약세와 지정학적 리스크 헤지 수단으로 유효.")
         if vix_price > 25:
@@ -466,7 +585,6 @@ def generate_macro_report():
             opportunities.append(f"나스닥 강세 (+{ixic_change:.1f}%): 기술주 모멘텀 유지 중. AI·반도체 관련주 추세 추종 유효.")
         if ks11_change > 1:
             opportunities.append(f"코스피 강세 (+{ks11_change:.1f}%): 국내 대형주 모멘텀 회복. 삼성전자, SK하이닉스 수혜.")
-
         if vix_change > 10:
             risks.append(f"VIX 급등 (+{vix_change:.1f}%): 단기 시장 충격 가능성. 레버리지 축소 및 현금 비중 확대 권고.")
         if oil_change > 3:
@@ -475,12 +593,10 @@ def generate_macro_report():
             risks.append(f"과도한 탐욕 (공포지수 {fear_greed}): 시장 과열 신호. 포지션 비중 점검 필요.")
         if ixic_change < -2:
             risks.append(f"나스닥 하락 ({ixic_change:.1f}%): 기술주 조정 진행 중. 추격 매수 자제.")
-
         if not opportunities:
             opportunities.append("현재 특정 섹터의 명확한 기회 신호 없음. 관망 후 신호 확인 대기.")
         if not risks:
             risks.append("현재 시장 환경 안정적. 특별한 위험 요인 감지되지 않음.")
-
         return {
             "market_phase": market_phase, "summary": summary,
             "pattern": pattern, "pattern_desc": pattern_desc,
@@ -799,24 +915,19 @@ async def background_updater():
             _cache["news"] = get_news()
             _cache["fear_greed"] = get_fear_greed()
             _cache["timestamp"] = datetime.now().isoformat()
-
-            # 감성 분석 + 섹터 수급 (매 사이클 업데이트)
             _cache["news_sentiment"] = get_news_sentiment(_cache["news"])
             _cache["sector_flow"] = get_sector_flow()
 
             is_emergency = False
             emergency_reason = None
-
             news_emergency, news_kw = check_emergency_news(_cache["news"])
             if news_emergency:
                 is_emergency = True
                 emergency_reason = f"긴급 뉴스 감지: {news_kw}"
-
             macro_emergency, macro_reason = check_macro_emergency()
             if macro_emergency:
                 is_emergency = True
                 emergency_reason = macro_reason
-
             all_stocks = _cache["kr"] + _cache["us"]
             for stock in all_stocks:
                 if not stock or "error" in stock: continue
@@ -833,7 +944,6 @@ async def background_updater():
                 is_emergency or _last_strategy_update is None or
                 (now - _last_strategy_update).seconds >= 3600
             )
-
             if should_update:
                 all_tickers = list(KR_STOCKS.keys()) + list(US_STOCKS.keys())
                 for ticker in all_tickers:
@@ -847,7 +957,8 @@ async def background_updater():
 
             _cache["is_emergency"] = is_emergency
             _cache["emergency_reason"] = emergency_reason
-            print(f"✅ {_cache['timestamp']} | 시장: {_cache['market_status']} | 감성: {_cache['news_sentiment'].get('label','?')}")
+            sentiment = _cache["news_sentiment"]
+            print(f"✅ {_cache['timestamp']} | 시장: {_cache['market_status']} | 심리: {sentiment.get('score','?')} ({sentiment.get('label','?')})")
         except Exception as e:
             print(f"업데이트 오류: {e}")
         await asyncio.sleep(5)
@@ -910,12 +1021,10 @@ def get_chart(ticker: str, interval: str = "5m", period: str = "5d"):
         VALID_PERIODS   = {"1d", "5d", "1mo", "1y"}
         if interval not in VALID_INTERVALS: interval = "5m"
         if period not in VALID_PERIODS: period = "5d"
-
         yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
         stock = yf.Ticker(yf_ticker)
         df = stock.history(period=period, interval=interval)
         if df is None or len(df) == 0: return []
-
         is_intraday = interval in ("1m", "5m", "60m")
         result = []
         for idx, row in df.iterrows():
@@ -959,7 +1068,6 @@ def search_stock(query: str):
             return {"error": f"'{query}' 검색 실패. 국내주식은 종목코드(예: 272210)로 검색해주세요."}
         else:
             ticker = query.upper().strip()
-
         yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
         stock = yf.Ticker(yf_ticker)
         try:
@@ -972,7 +1080,6 @@ def search_stock(query: str):
                 return {"error": f"'{query}' 종목을 찾을 수 없습니다"}
             price = float(df["Close"].dropna().iloc[-1])
             prev = float(df["Close"].dropna().iloc[-2]) if len(df) > 1 else price
-
         change = price - prev
         change_pct = (change / prev) * 100 if prev else 0
         rec = calculate_recommendation(ticker)
