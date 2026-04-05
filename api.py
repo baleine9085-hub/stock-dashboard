@@ -23,6 +23,8 @@ _cache = {
     "krx_map": {},
     "smart_picks": [],
     "macro_report": {},
+    "news_sentiment": {},
+    "sector_flow": [],
 }
 
 KR_STOCKS = {
@@ -103,6 +105,144 @@ STOCK_NAME_MAP = {
     "한화솔루션": "009830",
     "한화시스템": "272210",
 }
+
+# ── 감성 분석 키워드 ──────────────────────────────────────────
+POSITIVE_KEYWORDS = {
+    "rally": 2, "surge": 2, "soar": 2, "jump": 1, "rise": 1,
+    "beat": 2, "upgrade": 2, "bullish": 2, "growth": 1, "profit": 1,
+    "record": 1, "strong": 1, "gain": 1, "recovery": 1, "optimism": 1,
+    "breakthrough": 2, "outperform": 2, "boom": 2, "expand": 1,
+    "상승": 2, "급등": 2, "호실적": 2, "매수": 1, "강세": 2,
+    "반등": 2, "돌파": 2, "성장": 1, "흑자": 2, "수혜": 1,
+    "호조": 2, "긍정": 1, "기대": 1, "상향": 2,
+}
+
+NEGATIVE_KEYWORDS = {
+    "crash": 3, "plunge": 3, "collapse": 3, "fall": 1, "drop": 1,
+    "miss": 2, "downgrade": 2, "bearish": 2, "loss": 2, "decline": 1,
+    "recession": 3, "default": 3, "bankruptcy": 3, "crisis": 2,
+    "fear": 1, "risk": 1, "warning": 2, "tariff": 2, "sanction": 2,
+    "inflation": 1, "downfall": 2, "slump": 2, "weak": 1,
+    "하락": 2, "급락": 3, "폭락": 3, "매도": 1, "약세": 2,
+    "부진": 2, "적자": 2, "위기": 2, "불안": 1, "경고": 2,
+    "관세": 2, "제재": 2, "침체": 3, "파산": 3, "규제": 1,
+}
+
+def get_news_sentiment(news_list=None):
+    """뉴스 리스트를 감성 분석해 점수/비율/키워드 반환"""
+    try:
+        if news_list is None:
+            news_list = _cache.get("news", [])
+        text = " ".join(news_list).lower()
+
+        pos_score = 0
+        neg_score = 0
+        pos_found = []
+        neg_found = []
+
+        for kw, weight in POSITIVE_KEYWORDS.items():
+            if kw.lower() in text:
+                pos_score += weight
+                pos_found.append(kw)
+
+        for kw, weight in NEGATIVE_KEYWORDS.items():
+            if kw.lower() in text:
+                neg_score += weight
+                neg_found.append(kw)
+
+        total = pos_score + neg_score
+        if total == 0:
+            pos_ratio = 50
+            neg_ratio = 50
+        else:
+            pos_ratio = round(pos_score / total * 100)
+            neg_ratio = 100 - pos_ratio
+
+        # 종합 심리 점수 (0~100, 높을수록 긍정)
+        sentiment_score = pos_ratio
+
+        if sentiment_score >= 70:
+            label = "강한 긍정 🚀"
+            color = "#22c55e"
+        elif sentiment_score >= 55:
+            label = "긍정 📈"
+            color = "#84cc16"
+        elif sentiment_score >= 45:
+            label = "중립 😐"
+            color = "#facc15"
+        elif sentiment_score >= 30:
+            label = "부정 📉"
+            color = "#f97316"
+        else:
+            label = "강한 부정 🚨"
+            color = "#ff3b3b"
+
+        is_danger = neg_ratio >= 80
+
+        return {
+            "score": sentiment_score,
+            "pos_ratio": pos_ratio,
+            "neg_ratio": neg_ratio,
+            "pos_score": pos_score,
+            "neg_score": neg_score,
+            "pos_keywords": pos_found[:5],
+            "neg_keywords": neg_found[:5],
+            "label": label,
+            "color": color,
+            "is_danger": is_danger,
+            "news_count": len(news_list),
+            "updated_at": datetime.now().isoformat(),
+        }
+    except Exception as e:
+        print(f"감성 분석 오류: {e}")
+        return {"score": 50, "pos_ratio": 50, "neg_ratio": 50, "label": "중립 😐", "color": "#facc15", "is_danger": False}
+
+def get_sector_flow():
+    """캐시된 주가 데이터로 섹터별 수급(등락률 합산) 순위 계산"""
+    try:
+        sector_data = {}
+
+        all_stocks = _cache.get("kr", []) + _cache.get("us", [])
+        for stock in all_stocks:
+            if not stock or "error" in stock:
+                continue
+            ticker = stock.get("ticker", "")
+            info = SCREENING_UNIVERSE.get(ticker, {})
+            sector = info.get("sector", "기타")
+            change_pct = stock.get("change_pct", 0) or 0
+
+            if sector not in sector_data:
+                sector_data[sector] = {
+                    "sector": sector,
+                    "total_change": 0,
+                    "count": 0,
+                    "stocks": [],
+                }
+            sector_data[sector]["total_change"] += change_pct
+            sector_data[sector]["count"] += 1
+            sector_data[sector]["stocks"].append({
+                "ticker": ticker,
+                "name": info.get("name", ticker),
+                "change_pct": round(change_pct, 2),
+            })
+
+        result = []
+        for sector, data in sector_data.items():
+            count = data["count"]
+            avg_change = data["total_change"] / count if count > 0 else 0
+            result.append({
+                "sector": sector,
+                "avg_change": round(avg_change, 2),
+                "count": count,
+                "stocks": sorted(data["stocks"], key=lambda x: x["change_pct"], reverse=True),
+                "flow": "inflow" if avg_change > 0 else "outflow",
+            })
+
+        result.sort(key=lambda x: x["avg_change"], reverse=True)
+        return result
+    except Exception as e:
+        print(f"섹터 수급 오류: {e}")
+        return []
 
 def load_krx_stock_list():
     try:
@@ -660,6 +800,10 @@ async def background_updater():
             _cache["fear_greed"] = get_fear_greed()
             _cache["timestamp"] = datetime.now().isoformat()
 
+            # 감성 분석 + 섹터 수급 (매 사이클 업데이트)
+            _cache["news_sentiment"] = get_news_sentiment(_cache["news"])
+            _cache["sector_flow"] = get_sector_flow()
+
             is_emergency = False
             emergency_reason = None
 
@@ -703,7 +847,7 @@ async def background_updater():
 
             _cache["is_emergency"] = is_emergency
             _cache["emergency_reason"] = emergency_reason
-            print(f"✅ {_cache['timestamp']} | 시장: {_cache['market_status']}")
+            print(f"✅ {_cache['timestamp']} | 시장: {_cache['market_status']} | 감성: {_cache['news_sentiment'].get('label','?')}")
         except Exception as e:
             print(f"업데이트 오류: {e}")
         await asyncio.sleep(5)
@@ -779,8 +923,7 @@ def get_chart(ticker: str, interval: str = "5m", period: str = "5d"):
                 ts = int(idx.timestamp())
                 label = idx.strftime("%H:%M") if is_intraday else idx.strftime("%Y-%m-%d")
                 result.append({
-                    "timestamp": ts,
-                    "time": label,
+                    "timestamp": ts, "time": label,
                     "open":   round(float(row["Open"]),  2),
                     "high":   round(float(row["High"]),  2),
                     "low":    round(float(row["Low"]),   2),
@@ -842,6 +985,18 @@ def search_stock(query: str):
     except Exception as e:
         return {"error": f"검색 실패: {str(e)}"}
 
+@app.get("/api/news-sentiment")
+def news_sentiment():
+    if _cache["news_sentiment"]:
+        return _cache["news_sentiment"]
+    return get_news_sentiment()
+
+@app.get("/api/sector-flow")
+def sector_flow():
+    if _cache["sector_flow"]:
+        return _cache["sector_flow"]
+    return get_sector_flow()
+
 @app.websocket("/ws/stocks")
 async def websocket_stocks(websocket: WebSocket):
     await websocket.accept()
@@ -857,6 +1012,8 @@ async def websocket_stocks(websocket: WebSocket):
                 "recommendations": _cache["recommendations"],
                 "smart_picks": _cache["smart_picks"],
                 "macro_report": _cache["macro_report"],
+                "news_sentiment": _cache["news_sentiment"],
+                "sector_flow": _cache["sector_flow"],
                 "timestamp": datetime.now().isoformat(),
             }
             await websocket.send_text(json.dumps(data))
