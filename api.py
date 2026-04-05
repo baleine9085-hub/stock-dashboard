@@ -31,6 +31,7 @@ KR_STOCKS = {
     "035420": "NAVER",
     "005380": "현대차",
     "009830": "한화솔루션",
+    "272210": "한화시스템",
 }
 
 US_STOCKS = {
@@ -65,6 +66,7 @@ SCREENING_UNIVERSE = {
     "035420": {"name": "NAVER", "sector": "기술"},
     "005380": {"name": "현대차", "sector": "자동차"},
     "009830": {"name": "한화솔루션", "sector": "에너지"},
+    "272210": {"name": "한화시스템", "sector": "방산"},
 }
 
 MACRO_TICKERS = {
@@ -99,6 +101,7 @@ STOCK_NAME_MAP = {
     "현대차": "005380",
     "기아": "000270",
     "한화솔루션": "009830",
+    "한화시스템": "272210",
 }
 
 def load_krx_stock_list():
@@ -118,8 +121,6 @@ def load_krx_stock_list():
     except Exception as e:
         print(f"KRX 로드 실패: {e}")
         return {}
-
-# === SMART MONEY PICKS ===
 
 def calculate_rsi(prices, period=14):
     try:
@@ -150,78 +151,53 @@ def calculate_stock_score(ticker):
         current_price = prices[-1]
         score = 0
 
-        # 1. RSI (0-25)
         rsi = calculate_rsi(prices[-30:] if len(prices) >= 30 else prices)
-        if 30 <= rsi <= 50:
-            rsi_score = 25
-        elif rsi < 30:
-            rsi_score = 22
-        elif 50 < rsi <= 60:
-            rsi_score = 18
-        elif 60 < rsi <= 70:
-            rsi_score = 10
-        else:
-            rsi_score = 5
+        if 30 <= rsi <= 50: rsi_score = 25
+        elif rsi < 30: rsi_score = 22
+        elif 50 < rsi <= 60: rsi_score = 18
+        elif 60 < rsi <= 70: rsi_score = 10
+        else: rsi_score = 5
         score += rsi_score
 
-        # 2. 1개월 모멘텀 (0-25)
         momentum = 0
         if len(prices) >= 20:
             momentum = (current_price - prices[-20]) / prices[-20] * 100
-            if -3 <= momentum <= 5:
-                mom_score = 25
-            elif -8 <= momentum < -3:
-                mom_score = 20
-            elif 5 < momentum <= 15:
-                mom_score = 15
-            elif momentum < -8:
-                mom_score = 18
-            else:
-                mom_score = 8
+            if -3 <= momentum <= 5: mom_score = 25
+            elif -8 <= momentum < -3: mom_score = 20
+            elif 5 < momentum <= 15: mom_score = 15
+            elif momentum < -8: mom_score = 18
+            else: mom_score = 8
         else:
             mom_score = 12
         score += mom_score
 
-        # 3. 50일 MA 포지션 (0-25)
         ma50 = 0
         if len(prices) >= 50:
             ma50 = sum(prices[-50:]) / 50
             diff_pct = (current_price - ma50) / ma50 * 100
-            if -2 <= diff_pct <= 5:
-                ma_score = 25
-            elif -5 <= diff_pct < -2:
-                ma_score = 20
-            elif 5 < diff_pct <= 10:
-                ma_score = 15
-            elif diff_pct < -5:
-                ma_score = 18
-            else:
-                ma_score = 10
+            if -2 <= diff_pct <= 5: ma_score = 25
+            elif -5 <= diff_pct < -2: ma_score = 20
+            elif 5 < diff_pct <= 10: ma_score = 15
+            elif diff_pct < -5: ma_score = 18
+            else: ma_score = 10
         else:
             ma_score = 12
         score += ma_score
 
-        # 4. 거래량 트렌드 (0-25)
         vol_ratio = 1
         if len(volumes) >= 20:
             avg_vol = sum(volumes[-20:]) / 20
             recent_vol = sum(volumes[-5:]) / 5 if len(volumes) >= 5 else avg_vol
             vol_ratio = recent_vol / avg_vol if avg_vol > 0 else 1
-            if 1.2 <= vol_ratio <= 2.5:
-                vol_score = 25
-            elif vol_ratio > 2.5:
-                vol_score = 18
-            elif 0.9 <= vol_ratio < 1.2:
-                vol_score = 15
-            else:
-                vol_score = 8
+            if 1.2 <= vol_ratio <= 2.5: vol_score = 25
+            elif vol_ratio > 2.5: vol_score = 18
+            elif 0.9 <= vol_ratio < 1.2: vol_score = 15
+            else: vol_score = 8
         else:
             vol_score = 12
         score += vol_score
 
         final_score = min(score, 100)
-
-        # 목표 업사이드
         if rsi < 40 and ma50 > 0:
             upside = (ma50 - current_price) / current_price * 100 * 1.5
         elif rsi > 65:
@@ -230,8 +206,7 @@ def calculate_stock_score(ticker):
             upside = (final_score - 50) * 0.4
 
         return {
-            "score": final_score,
-            "rsi": rsi,
+            "score": final_score, "rsi": rsi,
             "momentum_1m": round(momentum, 2),
             "vol_ratio": round(vol_ratio, 2),
             "current_price": round(current_price, 2),
@@ -243,14 +218,10 @@ def calculate_stock_score(ticker):
         return None
 
 def get_grade(score):
-    if score >= 85:
-        return "적극 매수"
-    elif score >= 70:
-        return "매수"
-    elif score >= 55:
-        return "관망"
-    else:
-        return "주의"
+    if score >= 85: return "적극 매수"
+    elif score >= 70: return "매수"
+    elif score >= 55: return "관망"
+    else: return "주의"
 
 def generate_stock_analysis(ticker, score_data):
     try:
@@ -331,7 +302,7 @@ def generate_macro_report():
 
         if vix_price > 30 and fear_greed < 25:
             pattern = "2020년 3월 COVID 저점"
-            pattern_desc = "현재 공포지수와 VIX 수준은 2020년 3월 코로나 저점과 유사합니다. 당시 S&P500은 6개월 내 50% 이상 반등했으며, 역발상 투자자들에게 역사적 매수 기회였습니다. 우량주 중심의 분할 매수 전략이 유효합니다."
+            pattern_desc = "현재 공포지수와 VIX 수준은 2020년 3월 코로나 저점과 유사합니다. 당시 S&P500은 6개월 내 50% 이상 반등했으며, 역발상 투자자들에게 역사적 매수 기회였습니다."
         elif vix_price > 25 and ixic_change < -3:
             pattern = "2022년 금리 인상 사이클"
             pattern_desc = "현재 패턴은 2022년 연준의 공격적 금리 인상 초기와 유사합니다. 당시 나스닥은 고점 대비 33% 하락 후 반등했으며, 반도체·AI 중심의 단계적 분할 매수가 유효했습니다."
@@ -371,15 +342,11 @@ def generate_macro_report():
             risks.append("현재 시장 환경 안정적. 특별한 위험 요인 감지되지 않음.")
 
         return {
-            "market_phase": market_phase,
-            "summary": summary,
-            "pattern": pattern,
-            "pattern_desc": pattern_desc,
-            "opportunities": opportunities[:4],
-            "risks": risks[:4],
+            "market_phase": market_phase, "summary": summary,
+            "pattern": pattern, "pattern_desc": pattern_desc,
+            "opportunities": opportunities[:4], "risks": risks[:4],
             "generated_at": datetime.now().isoformat(),
-            "vix": vix_price,
-            "fear_greed": fear_greed,
+            "vix": vix_price, "fear_greed": fear_greed,
         }
     except Exception as e:
         print(f"매크로 리포트 생성 오류: {e}")
@@ -395,17 +362,11 @@ def get_smart_money_picks():
             rec = _cache["recommendations"].get(ticker)
             buy_price = rec.get("buy1") if rec else None
             results.append({
-                "ticker": ticker,
-                "name": info["name"],
-                "sector": info["sector"],
-                "score": score_data["score"],
-                "grade": get_grade(score_data["score"]),
-                "current_price": score_data["current_price"],
-                "buy_price": buy_price,
-                "upside": score_data["upside"],
-                "rsi": score_data["rsi"],
-                "momentum_1m": score_data["momentum_1m"],
-                "currency": score_data["currency"],
+                "ticker": ticker, "name": info["name"], "sector": info["sector"],
+                "score": score_data["score"], "grade": get_grade(score_data["score"]),
+                "current_price": score_data["current_price"], "buy_price": buy_price,
+                "upside": score_data["upside"], "rsi": score_data["rsi"],
+                "momentum_1m": score_data["momentum_1m"], "currency": score_data["currency"],
             })
         results.sort(key=lambda x: x["score"], reverse=True)
         print(f"✅ 스마트픽 {len(results[:10])}개 계산 완료")
@@ -414,28 +375,19 @@ def get_smart_money_picks():
         print(f"스마트픽 오류: {e}")
         return []
 
-# === 기존 함수들 ===
-
 def get_kr_market_status():
     try:
         kr_tz = pytz.timezone('Asia/Seoul')
         now = datetime.now(kr_tz)
         t = now.hour * 60 + now.minute
         weekday = now.weekday()
-        if weekday >= 5:
-            return "휴장"
-        elif 8*60+30 <= t < 9*60:
-            return "장전시간외"
-        elif 9*60 <= t < 15*60+30:
-            return "정규"
-        elif 15*60+30 <= t < 15*60+40:
-            return "장마감"
-        elif 15*60+40 <= t < 16*60:
-            return "장후시간외"
-        elif 16*60 <= t < 18*60:
-            return "시간외단일가"
-        else:
-            return "장외"
+        if weekday >= 5: return "휴장"
+        elif 8*60+30 <= t < 9*60: return "장전시간외"
+        elif 9*60 <= t < 15*60+30: return "정규"
+        elif 15*60+30 <= t < 15*60+40: return "장마감"
+        elif 15*60+40 <= t < 16*60: return "장후시간외"
+        elif 16*60 <= t < 18*60: return "시간외단일가"
+        else: return "장외"
     except:
         return "정규"
 
@@ -445,16 +397,11 @@ def get_us_market_status():
         now = datetime.now(us_tz)
         t = now.hour * 60 + now.minute
         weekday = now.weekday()
-        if weekday >= 5:
-            return "휴장"
-        elif 4*60 <= t < 9*60+30:
-            return "프리마켓"
-        elif 9*60+30 <= t < 16*60:
-            return "정규"
-        elif 16*60 <= t < 20*60:
-            return "애프터마켓"
-        else:
-            return "휴장"
+        if weekday >= 5: return "휴장"
+        elif 4*60 <= t < 9*60+30: return "프리마켓"
+        elif 9*60+30 <= t < 16*60: return "정규"
+        elif 16*60 <= t < 20*60: return "애프터마켓"
+        else: return "휴장"
     except:
         return "정규"
 
@@ -467,22 +414,15 @@ def get_macro():
             price = info.last_price
             prev = info.previous_close
             change_pct = ((price - prev) / prev) * 100 if prev and prev != 0 else 0
-            result[ticker] = {
-                "name": name,
-                "price": round(price, 2),
-                "change_pct": round(change_pct, 2),
-            }
+            result[ticker] = {"name": name, "price": round(price, 2), "change_pct": round(change_pct, 2)}
         except Exception as e:
             print(f"매크로 오류 {ticker}: {e}")
     return result
 
 def get_fear_greed():
     try:
-        res = requests.get(
-            "https://production.dataviz.cnn.io/index/fearandgreed/graphdata",
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=5
-        )
+        res = requests.get("https://production.dataviz.cnn.io/index/fearandgreed/graphdata",
+            headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
         data = res.json()
         return int(float(data["fear_and_greed"]["score"]))
     except:
@@ -490,11 +430,8 @@ def get_fear_greed():
 
 def get_news():
     try:
-        res = requests.get(
-            "https://feeds.bbci.co.uk/news/business/rss.xml",
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=5
-        )
+        res = requests.get("https://feeds.bbci.co.uk/news/business/rss.xml",
+            headers={"User-Agent": "Mozilla/5.0"}, timeout=5)
         import xml.etree.ElementTree as ET
         root = ET.fromstring(res.content)
         items = root.findall(".//item")
@@ -517,26 +454,19 @@ def check_emergency_news(news_list):
 
 def check_price_emergency(ticker, current_price):
     history = _cache["price_history"].get(ticker, [])
-    if len(history) < 2:
-        return False, 0
+    if len(history) < 2: return False, 0
     oldest = history[0]
-    if oldest == 0:
-        return False, 0
+    if oldest == 0: return False, 0
     change_pct = ((current_price - oldest) / oldest) * 100
-    if abs(change_pct) >= 3:
-        return True, round(change_pct, 2)
+    if abs(change_pct) >= 3: return True, round(change_pct, 2)
     return False, round(change_pct, 2)
 
 def check_macro_emergency():
     macro = _cache.get("macro", {})
-    ixic = macro.get("^IXIC", {})
-    ks11 = macro.get("^KS11", {})
-    ixic_change = ixic.get("change_pct", 0)
-    ks11_change = ks11.get("change_pct", 0)
-    if ixic_change <= -1.0:
-        return True, f"나스닥 {ixic_change}% 급락"
-    if ks11_change <= -1.0:
-        return True, f"코스피 {ks11_change}% 급락"
+    ixic_change = macro.get("^IXIC", {}).get("change_pct", 0)
+    ks11_change = macro.get("^KS11", {}).get("change_pct", 0)
+    if ixic_change <= -1.0: return True, f"나스닥 {ixic_change}% 급락"
+    if ks11_change <= -1.0: return True, f"코스피 {ks11_change}% 급락"
     return False, None
 
 def update_price_history(ticker, price):
@@ -558,11 +488,7 @@ def get_kis_token():
         return None
     try:
         url = "https://openapi.koreainvestment.com:9443/oauth2/tokenP"
-        body = {
-            "grant_type": "client_credentials",
-            "appkey": KIS_APP_KEY,
-            "appsecret": KIS_APP_SECRET,
-        }
+        body = {"grant_type": "client_credentials", "appkey": KIS_APP_KEY, "appsecret": KIS_APP_SECRET}
         res = requests.post(url, json=body)
         data = res.json()
         _kis_token = data.get("access_token")
@@ -578,14 +504,12 @@ def get_kr_stock_kis(ticker):
         token = get_kis_token()
         if not token:
             result = get_kr_stock_yf(ticker)
-            if result:
-                result["market_status"] = market_status
+            if result: result["market_status"] = market_status
             return result
         url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price"
         headers = {
             "authorization": f"Bearer {token}",
-            "appkey": KIS_APP_KEY,
-            "appsecret": KIS_APP_SECRET,
+            "appkey": KIS_APP_KEY, "appsecret": KIS_APP_SECRET,
             "tr_id": "FHKST01010100",
         }
         params = {"fid_cond_mrkt_div_code": "J", "fid_input_iscd": ticker}
@@ -608,20 +532,14 @@ def get_kr_stock_kis(ticker):
                 pass
         update_price_history(ticker, price)
         return {
-            "ticker": ticker,
-            "name": KR_STOCKS.get(ticker, ticker),
-            "price": price,
-            "change": change,
-            "change_pct": change_pct,
-            "currency": "KRW",
-            "source": "KIS실시간",
-            "market_status": market_status,
-            "updated": datetime.now().isoformat(),
+            "ticker": ticker, "name": KR_STOCKS.get(ticker, ticker),
+            "price": price, "change": change, "change_pct": change_pct,
+            "currency": "KRW", "source": "KIS실시간",
+            "market_status": market_status, "updated": datetime.now().isoformat(),
         }
     except:
         result = get_kr_stock_yf(ticker)
-        if result:
-            result["market_status"] = market_status
+        if result: result["market_status"] = market_status
         return result
 
 def get_kr_stock_yf(ticker):
@@ -634,14 +552,10 @@ def get_kr_stock_yf(ticker):
         change_pct = (change / prev) * 100 if prev else 0
         update_price_history(ticker, price)
         return {
-            "ticker": ticker,
-            "name": KR_STOCKS.get(ticker, ticker),
-            "price": round(price, 2),
-            "change": round(change, 2),
-            "change_pct": round(change_pct, 2),
-            "currency": "KRW",
-            "source": "yfinance",
-            "market_status": get_kr_market_status(),
+            "ticker": ticker, "name": KR_STOCKS.get(ticker, ticker),
+            "price": round(price, 2), "change": round(change, 2),
+            "change_pct": round(change_pct, 2), "currency": "KRW",
+            "source": "yfinance", "market_status": get_kr_market_status(),
             "updated": datetime.now().isoformat(),
         }
     except Exception as e:
@@ -657,14 +571,10 @@ def get_us_stock(ticker):
         change_pct = (change / prev_close) * 100
         update_price_history(ticker, price)
         return {
-            "ticker": ticker,
-            "name": US_STOCKS.get(ticker, ticker),
-            "price": round(price, 2),
-            "change": round(change, 2),
-            "change_pct": round(change_pct, 2),
-            "currency": "USD",
-            "source": "yfinance",
-            "market_status": get_us_market_status(),
+            "ticker": ticker, "name": US_STOCKS.get(ticker, ticker),
+            "price": round(price, 2), "change": round(change, 2),
+            "change_pct": round(change_pct, 2), "currency": "USD",
+            "source": "yfinance", "market_status": get_us_market_status(),
             "updated": datetime.now().isoformat(),
         }
     except Exception as e:
@@ -673,14 +583,10 @@ def get_us_stock(ticker):
 def analyze_news_keywords(news_list):
     text = " ".join(news_list).lower()
     bad_keywords = {
-        "war": 0.05, "전쟁": 0.05,
-        "sanction": 0.04, "제재": 0.04,
-        "ban": 0.03, "규제": 0.03,
-        "crash": 0.04, "crisis": 0.03,
-        "rate hike": 0.03, "금리": 0.02,
-        "tariff": 0.04, "관세": 0.04,
-        "recession": 0.04, "침체": 0.04,
-        "default": 0.05, "파산": 0.05,
+        "war": 0.05, "전쟁": 0.05, "sanction": 0.04, "제재": 0.04,
+        "ban": 0.03, "규제": 0.03, "crash": 0.04, "crisis": 0.03,
+        "rate hike": 0.03, "금리": 0.02, "tariff": 0.04, "관세": 0.04,
+        "recession": 0.04, "침체": 0.04, "default": 0.05, "파산": 0.05,
         "inflation": 0.02, "인플레": 0.02,
     }
     discount = 0.0
@@ -709,26 +615,20 @@ def calculate_recommendation(ticker, is_emergency=False, emergency_reason=None):
         yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
         stock = yf.Ticker(yf_ticker)
         df = stock.history(period="1mo", interval="1d")
-        if df is None or len(df) == 0:
-            return None
+        if df is None or len(df) == 0: return None
         price = float(df["Close"].dropna().iloc[-1])
-        if price != price:
-            return None
+        if price != price: return None
         news_list = _cache.get("news", [])
         fear_greed_score = _cache.get("fear_greed", 50)
         macro = _cache.get("macro", {})
         vix = macro.get("^VIX", {}).get("price", 0)
         discount, triggered = analyze_news_keywords(news_list)
-        if is_emergency:
-            discount = min(discount + 0.05, 0.20)
-        if vix > 30:
-            discount = min(discount + 0.05, 0.20)
-        elif vix > 20:
-            discount = min(discount + 0.02, 0.20)
+        if is_emergency: discount = min(discount + 0.05, 0.20)
+        if vix > 30: discount = min(discount + 0.05, 0.20)
+        elif vix > 20: discount = min(discount + 0.02, 0.20)
         scenario = get_sniper_scenario(fear_greed_score, discount, triggered, is_emergency, emergency_reason)
         return {
-            "ticker": ticker,
-            "current": price,
+            "ticker": ticker, "current": price,
             "buy1": round(price * (0.97 - discount), 2),
             "buy2": round(price * (0.93 - discount), 2),
             "buy3": round(price * (0.88 - discount), 2),
@@ -737,8 +637,7 @@ def calculate_recommendation(ticker, is_emergency=False, emergency_reason=None):
             "is_bad_news": discount > 0.02,
             "discount_pct": round(discount * 100, 1),
             "triggered_keywords": triggered[:5],
-            "scenario": scenario,
-            "is_emergency": is_emergency,
+            "scenario": scenario, "is_emergency": is_emergency,
             "emergency_reason": emergency_reason,
             "currency": "KRW" if len(ticker) == 6 and ticker.isdigit() else "USD",
             "updated_at": datetime.now().isoformat(),
@@ -776,8 +675,7 @@ async def background_updater():
 
             all_stocks = _cache["kr"] + _cache["us"]
             for stock in all_stocks:
-                if not stock or "error" in stock:
-                    continue
+                if not stock or "error" in stock: continue
                 ticker = stock.get("ticker")
                 price = stock.get("price", 0)
                 if price:
@@ -788,8 +686,7 @@ async def background_updater():
 
             now = datetime.now()
             should_update = (
-                is_emergency or
-                _last_strategy_update is None or
+                is_emergency or _last_strategy_update is None or
                 (now - _last_strategy_update).seconds >= 3600
             )
 
@@ -797,8 +694,7 @@ async def background_updater():
                 all_tickers = list(KR_STOCKS.keys()) + list(US_STOCKS.keys())
                 for ticker in all_tickers:
                     rec = calculate_recommendation(ticker, is_emergency, emergency_reason)
-                    if rec:
-                        _cache["recommendations"][ticker] = rec
+                    if rec: _cache["recommendations"][ticker] = rec
                 _cache["smart_picks"] = get_smart_money_picks()
                 _cache["macro_report"] = generate_macro_report()
                 _last_strategy_update = now
@@ -819,12 +715,7 @@ async def lifespan(app):
     yield
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/")
 def root():
@@ -865,14 +756,8 @@ def macro_report():
 @app.get("/api/stock-analysis/{ticker}")
 def stock_analysis(ticker: str):
     score_data = calculate_stock_score(ticker)
-    if not score_data:
-        return {"error": "분석 실패"}
-    analysis_text = generate_stock_analysis(ticker, score_data)
-    return {
-        "ticker": ticker,
-        "analysis": analysis_text,
-        "score": score_data,
-    }
+    if not score_data: return {"error": "분석 실패"}
+    return {"ticker": ticker, "analysis": generate_stock_analysis(ticker, score_data), "score": score_data}
 
 @app.get("/api/chart/{ticker}")
 def get_chart(ticker: str):
@@ -880,16 +765,13 @@ def get_chart(ticker: str):
         yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
         stock = yf.Ticker(yf_ticker)
         df = stock.history(period="1d", interval="5m")
-        if df is None or len(df) == 0:
-            return []
+        if df is None or len(df) == 0: return []
         result = []
         for idx, row in df.iterrows():
             result.append({
                 "time": idx.strftime("%H:%M"),
-                "open": round(float(row["Open"]), 2),
-                "high": round(float(row["High"]), 2),
-                "low": round(float(row["Low"]), 2),
-                "close": round(float(row["Close"]), 2),
+                "open": round(float(row["Open"]), 2), "high": round(float(row["High"]), 2),
+                "low": round(float(row["Low"]), 2), "close": round(float(row["Close"]), 2),
                 "volume": int(row["Volume"]),
             })
         return result
@@ -921,7 +803,6 @@ def search_stock(query: str):
 
         yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
         stock = yf.Ticker(yf_ticker)
-
         try:
             info = stock.fast_info
             price = float(info.last_price) if info.last_price else 0
@@ -937,10 +818,8 @@ def search_stock(query: str):
         change_pct = (change / prev) * 100 if prev else 0
         rec = calculate_recommendation(ticker)
         return {
-            "ticker": ticker,
-            "price": round(price, 2),
-            "change": round(change, 2),
-            "change_pct": round(change_pct, 2),
+            "ticker": ticker, "price": round(price, 2),
+            "change": round(change, 2), "change_pct": round(change_pct, 2),
             "currency": "KRW" if len(ticker) == 6 and ticker.isdigit() else "USD",
             "recommendation": rec,
         }
@@ -953,10 +832,8 @@ async def websocket_stocks(websocket: WebSocket):
     try:
         while True:
             data = {
-                "kr": _cache["kr"],
-                "us": _cache["us"],
-                "macro": _cache["macro"],
-                "news": _cache["news"],
+                "kr": _cache["kr"], "us": _cache["us"],
+                "macro": _cache["macro"], "news": _cache["news"],
                 "fear_greed": _cache["fear_greed"],
                 "market_status": _cache["market_status"],
                 "is_emergency": _cache.get("is_emergency", False),
