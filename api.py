@@ -21,6 +21,8 @@ _cache = {
     "price_history": {},
     "macro_history": {},
     "krx_map": {},
+    "smart_picks": [],
+    "macro_report": {},
 }
 
 KR_STOCKS = {
@@ -40,6 +42,29 @@ US_STOCKS = {
     "TSLA": "테슬라",
     "GLW": "코닝",
     "AMAT": "어플라이드머티리얼",
+}
+
+SCREENING_UNIVERSE = {
+    "NVDA": {"name": "엔비디아", "sector": "반도체"},
+    "AAPL": {"name": "애플", "sector": "기술"},
+    "MSFT": {"name": "마이크로소프트", "sector": "기술"},
+    "GOOGL": {"name": "구글", "sector": "기술"},
+    "AMZN": {"name": "아마존", "sector": "소비재"},
+    "META": {"name": "메타", "sector": "기술"},
+    "TSLA": {"name": "테슬라", "sector": "자동차"},
+    "AMD": {"name": "AMD", "sector": "반도체"},
+    "MU": {"name": "마이크론", "sector": "반도체"},
+    "AMAT": {"name": "어플라이드머티리얼", "sector": "반도체장비"},
+    "SNDK": {"name": "샌디스크", "sector": "반도체"},
+    "GLW": {"name": "코닝", "sector": "소재"},
+    "JPM": {"name": "JP모건", "sector": "금융"},
+    "GS": {"name": "골드만삭스", "sector": "금융"},
+    "NFLX": {"name": "넷플릭스", "sector": "미디어"},
+    "005930": {"name": "삼성전자", "sector": "반도체"},
+    "000660": {"name": "SK하이닉스", "sector": "반도체"},
+    "035420": {"name": "NAVER", "sector": "기술"},
+    "005380": {"name": "현대차", "sector": "자동차"},
+    "009830": {"name": "한화솔루션", "sector": "에너지"},
 }
 
 MACRO_TICKERS = {
@@ -93,6 +118,303 @@ def load_krx_stock_list():
     except Exception as e:
         print(f"KRX 로드 실패: {e}")
         return {}
+
+# === SMART MONEY PICKS ===
+
+def calculate_rsi(prices, period=14):
+    try:
+        if len(prices) < period + 1:
+            return 50
+        deltas = [prices[i] - prices[i-1] for i in range(1, len(prices))]
+        recent = deltas[-period:]
+        gains = [max(d, 0) for d in recent]
+        losses = [abs(min(d, 0)) for d in recent]
+        avg_gain = sum(gains) / period
+        avg_loss = sum(losses) / period
+        if avg_loss == 0:
+            return 100
+        rs = avg_gain / avg_loss
+        return round(100 - (100 / (1 + rs)), 1)
+    except:
+        return 50
+
+def calculate_stock_score(ticker):
+    try:
+        yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
+        stock = yf.Ticker(yf_ticker)
+        df = stock.history(period="3mo", interval="1d")
+        if df is None or len(df) < 20:
+            return None
+        prices = df["Close"].dropna().tolist()
+        volumes = df["Volume"].dropna().tolist()
+        current_price = prices[-1]
+        score = 0
+
+        # 1. RSI (0-25)
+        rsi = calculate_rsi(prices[-30:] if len(prices) >= 30 else prices)
+        if 30 <= rsi <= 50:
+            rsi_score = 25
+        elif rsi < 30:
+            rsi_score = 22
+        elif 50 < rsi <= 60:
+            rsi_score = 18
+        elif 60 < rsi <= 70:
+            rsi_score = 10
+        else:
+            rsi_score = 5
+        score += rsi_score
+
+        # 2. 1개월 모멘텀 (0-25)
+        momentum = 0
+        if len(prices) >= 20:
+            momentum = (current_price - prices[-20]) / prices[-20] * 100
+            if -3 <= momentum <= 5:
+                mom_score = 25
+            elif -8 <= momentum < -3:
+                mom_score = 20
+            elif 5 < momentum <= 15:
+                mom_score = 15
+            elif momentum < -8:
+                mom_score = 18
+            else:
+                mom_score = 8
+        else:
+            mom_score = 12
+        score += mom_score
+
+        # 3. 50일 MA 포지션 (0-25)
+        ma50 = 0
+        if len(prices) >= 50:
+            ma50 = sum(prices[-50:]) / 50
+            diff_pct = (current_price - ma50) / ma50 * 100
+            if -2 <= diff_pct <= 5:
+                ma_score = 25
+            elif -5 <= diff_pct < -2:
+                ma_score = 20
+            elif 5 < diff_pct <= 10:
+                ma_score = 15
+            elif diff_pct < -5:
+                ma_score = 18
+            else:
+                ma_score = 10
+        else:
+            ma_score = 12
+        score += ma_score
+
+        # 4. 거래량 트렌드 (0-25)
+        vol_ratio = 1
+        if len(volumes) >= 20:
+            avg_vol = sum(volumes[-20:]) / 20
+            recent_vol = sum(volumes[-5:]) / 5 if len(volumes) >= 5 else avg_vol
+            vol_ratio = recent_vol / avg_vol if avg_vol > 0 else 1
+            if 1.2 <= vol_ratio <= 2.5:
+                vol_score = 25
+            elif vol_ratio > 2.5:
+                vol_score = 18
+            elif 0.9 <= vol_ratio < 1.2:
+                vol_score = 15
+            else:
+                vol_score = 8
+        else:
+            vol_score = 12
+        score += vol_score
+
+        final_score = min(score, 100)
+
+        # 목표 업사이드
+        if rsi < 40 and ma50 > 0:
+            upside = (ma50 - current_price) / current_price * 100 * 1.5
+        elif rsi > 65:
+            upside = -5.0
+        else:
+            upside = (final_score - 50) * 0.4
+
+        return {
+            "score": final_score,
+            "rsi": rsi,
+            "momentum_1m": round(momentum, 2),
+            "vol_ratio": round(vol_ratio, 2),
+            "current_price": round(current_price, 2),
+            "upside": round(upside, 1),
+            "currency": "KRW" if len(ticker) == 6 and ticker.isdigit() else "USD",
+        }
+    except Exception as e:
+        print(f"점수 계산 오류 {ticker}: {e}")
+        return None
+
+def get_grade(score):
+    if score >= 85:
+        return "적극 매수"
+    elif score >= 70:
+        return "매수"
+    elif score >= 55:
+        return "관망"
+    else:
+        return "주의"
+
+def generate_stock_analysis(ticker, score_data):
+    try:
+        info = SCREENING_UNIVERSE.get(ticker, {})
+        name = info.get("name", ticker)
+        sector = info.get("sector", "기타")
+        score = score_data.get("score", 50)
+        rsi = score_data.get("rsi", 50)
+        momentum = score_data.get("momentum_1m", 0)
+        upside = score_data.get("upside", 0)
+        macro = _cache.get("macro", {})
+        vix = macro.get("^VIX", {}).get("price", 20)
+        fear_greed = _cache.get("fear_greed", 50)
+        grade = get_grade(score)
+        lines = []
+
+        if rsi < 35:
+            lines.append(f"{name}은(는) RSI {rsi}로 과매도 구간에 진입했습니다. 기술적 반등 가능성이 높으며 단기 저점 매수 기회로 판단됩니다.")
+        elif rsi < 50:
+            lines.append(f"{name}의 RSI {rsi}는 매수 적정 구간입니다. 추가 하락 압력이 제한적이며 분할 매수 접근이 유효합니다.")
+        elif rsi < 65:
+            lines.append(f"{name}의 RSI {rsi}는 중립 구간으로, 추세 추종 전략이 적합합니다.")
+        else:
+            lines.append(f"{name}의 RSI {rsi}는 과매수 구간으로 신규 진입보다 기존 보유자의 비중 관리가 필요합니다.")
+
+        if momentum < -8:
+            lines.append(f"최근 1개월간 {abs(momentum):.1f}% 조정을 받으며 가격 부담이 해소되었습니다. {sector} 섹터의 구조적 성장성을 고려하면 현 구간은 전략적 매수 타이밍입니다.")
+        elif momentum < 0:
+            lines.append(f"1개월 수익률 {momentum:.1f}%로 소폭 조정 중입니다. 지지선 확인 후 반등 시 매수 대응이 유효합니다.")
+        elif momentum < 10:
+            lines.append(f"1개월 수익률 +{momentum:.1f}%로 완만한 상승세를 유지하고 있습니다.")
+        else:
+            lines.append(f"1개월 수익률 +{momentum:.1f}%로 강한 모멘텀을 보이고 있으나 단기 과열 여부를 점검해야 합니다.")
+
+        if vix > 25:
+            lines.append(f"VIX {vix:.1f}로 시장 변동성이 확대된 상태입니다. 분할 매수 전략으로 리스크를 분산하며 3차 벙커까지 여유 자금을 확보하십시오.")
+        elif fear_greed < 35:
+            lines.append(f"CNN 공포지수 {fear_greed}로 극도의 공포 구간입니다. 역발상 투자 관점에서 현 구간은 중장기 저점 매수 구간으로 판단됩니다.")
+        else:
+            lines.append(f"현재 매크로 환경은 {sector} 섹터에 중립적입니다. 개별 종목 펀더멘털에 집중한 선별적 접근이 필요합니다.")
+
+        lines.append(f"종합 AI 점수 {score}점 ({grade}). 목표 업사이드 {upside:+.1f}%.")
+        return " ".join(lines)
+    except:
+        return f"{ticker} 분석 생성 중 오류가 발생했습니다."
+
+def generate_macro_report():
+    try:
+        macro = _cache.get("macro", {})
+        fear_greed = _cache.get("fear_greed", 50)
+        vix = macro.get("^VIX", {})
+        ixic = macro.get("^IXIC", {})
+        ks11 = macro.get("^KS11", {})
+        gold = macro.get("GC=F", {})
+        oil = macro.get("CL=F", {})
+        dollar = macro.get("DX-Y.NYB", {})
+
+        vix_price = vix.get("price", 20)
+        vix_change = vix.get("change_pct", 0)
+        gold_change = gold.get("change_pct", 0)
+        oil_change = oil.get("change_pct", 0)
+        dollar_change = dollar.get("change_pct", 0)
+        ixic_change = ixic.get("change_pct", 0)
+        ks11_change = ks11.get("change_pct", 0)
+
+        if vix_price > 30:
+            market_phase = "고변동성 공포 장세"
+            summary = f"VIX {vix_price:.1f}로 시장 변동성이 극도로 높은 상태입니다. 투자자들의 위험 회피 심리가 강하며, 안전자산 선호가 두드러지고 있습니다. 역사적으로 VIX 30+ 구간은 중기 저점 형성 구간과 일치합니다."
+        elif vix_price > 20:
+            market_phase = "변동성 확대 구간"
+            summary = f"VIX {vix_price:.1f}로 평균 이상의 변동성이 지속되고 있습니다. 단기 불확실성이 존재하나 중장기 분할 매수 기회가 형성되는 구간입니다."
+        elif vix_price > 15:
+            market_phase = "정상 변동성 구간"
+            summary = f"VIX {vix_price:.1f}로 시장이 안정적인 흐름을 보이고 있습니다. 추세 추종 전략이 유효한 환경으로, 모멘텀 종목 중심의 접근이 적합합니다."
+        else:
+            market_phase = "저변동성 강세장"
+            summary = f"VIX {vix_price:.1f}로 시장 변동성이 매우 낮습니다. 강세장이 지속되고 있으나 과도한 레버리지는 주의가 필요합니다."
+
+        if vix_price > 30 and fear_greed < 25:
+            pattern = "2020년 3월 COVID 저점"
+            pattern_desc = "현재 공포지수와 VIX 수준은 2020년 3월 코로나 저점과 유사합니다. 당시 S&P500은 6개월 내 50% 이상 반등했으며, 역발상 투자자들에게 역사적 매수 기회였습니다. 우량주 중심의 분할 매수 전략이 유효합니다."
+        elif vix_price > 25 and ixic_change < -3:
+            pattern = "2022년 금리 인상 사이클"
+            pattern_desc = "현재 패턴은 2022년 연준의 공격적 금리 인상 초기와 유사합니다. 당시 나스닥은 고점 대비 33% 하락 후 반등했으며, 반도체·AI 중심의 단계적 분할 매수가 유효했습니다."
+        elif vix_price < 15 and fear_greed > 70:
+            pattern = "2021년 유동성 장세"
+            pattern_desc = "현재 저변동성 고탐욕 환경은 2021년 유동성 장세와 유사합니다. 추세 추종이 유효하나 고평가 종목의 급락 리스크에 대비하여 분산 투자가 필요합니다."
+        else:
+            pattern = "2019년 금리 인하 사이클"
+            pattern_desc = "현재 시장은 2019년 연준 금리 인하 시점과 유사한 흐름을 보입니다. 금, 채권 등 안전자산과 성장주의 혼합 포트폴리오가 유효했던 시기로, 선별적 접근이 중요합니다."
+
+        opportunities = []
+        risks = []
+
+        if gold_change > 0.5:
+            opportunities.append(f"금 (GC=F +{gold_change:.1f}%): 안전자산 수요 증가. 달러 약세와 지정학적 리스크 헤지 수단으로 유효.")
+        if vix_price > 25:
+            opportunities.append("고변동성 역발상 매수: VIX 25+ 구간은 역사적으로 중기 저점 형성 구간. 우량주 분할 매수 기회.")
+        if dollar_change < -0.5:
+            opportunities.append(f"달러 약세 ({dollar_change:+.1f}%): 원자재·신흥국 강세 환경. 반도체, 소재 섹터 수혜 예상.")
+        if ixic_change > 1:
+            opportunities.append(f"나스닥 강세 (+{ixic_change:.1f}%): 기술주 모멘텀 유지 중. AI·반도체 관련주 추세 추종 유효.")
+        if ks11_change > 1:
+            opportunities.append(f"코스피 강세 (+{ks11_change:.1f}%): 국내 대형주 모멘텀 회복. 삼성전자, SK하이닉스 수혜.")
+
+        if vix_change > 10:
+            risks.append(f"VIX 급등 (+{vix_change:.1f}%): 단기 시장 충격 가능성. 레버리지 축소 및 현금 비중 확대 권고.")
+        if oil_change > 3:
+            risks.append(f"유가 급등 (WTI +{oil_change:.1f}%): 인플레이션 재점화 우려. 성장주 밸류에이션 압박 가능.")
+        if fear_greed > 75:
+            risks.append(f"과도한 탐욕 (공포지수 {fear_greed}): 시장 과열 신호. 포지션 비중 점검 필요.")
+        if ixic_change < -2:
+            risks.append(f"나스닥 하락 ({ixic_change:.1f}%): 기술주 조정 진행 중. 추격 매수 자제.")
+
+        if not opportunities:
+            opportunities.append("현재 특정 섹터의 명확한 기회 신호 없음. 관망 후 신호 확인 대기.")
+        if not risks:
+            risks.append("현재 시장 환경 안정적. 특별한 위험 요인 감지되지 않음.")
+
+        return {
+            "market_phase": market_phase,
+            "summary": summary,
+            "pattern": pattern,
+            "pattern_desc": pattern_desc,
+            "opportunities": opportunities[:4],
+            "risks": risks[:4],
+            "generated_at": datetime.now().isoformat(),
+            "vix": vix_price,
+            "fear_greed": fear_greed,
+        }
+    except Exception as e:
+        print(f"매크로 리포트 생성 오류: {e}")
+        return {}
+
+def get_smart_money_picks():
+    try:
+        results = []
+        for ticker, info in SCREENING_UNIVERSE.items():
+            score_data = calculate_stock_score(ticker)
+            if not score_data:
+                continue
+            rec = _cache["recommendations"].get(ticker)
+            buy_price = rec.get("buy1") if rec else None
+            results.append({
+                "ticker": ticker,
+                "name": info["name"],
+                "sector": info["sector"],
+                "score": score_data["score"],
+                "grade": get_grade(score_data["score"]),
+                "current_price": score_data["current_price"],
+                "buy_price": buy_price,
+                "upside": score_data["upside"],
+                "rsi": score_data["rsi"],
+                "momentum_1m": score_data["momentum_1m"],
+                "currency": score_data["currency"],
+            })
+        results.sort(key=lambda x: x["score"], reverse=True)
+        print(f"✅ 스마트픽 {len(results[:10])}개 계산 완료")
+        return results[:10]
+    except Exception as e:
+        print(f"스마트픽 오류: {e}")
+        return []
+
+# === 기존 함수들 ===
 
 def get_kr_market_status():
     try:
@@ -477,6 +799,8 @@ async def background_updater():
                     rec = calculate_recommendation(ticker, is_emergency, emergency_reason)
                     if rec:
                         _cache["recommendations"][ticker] = rec
+                _cache["smart_picks"] = get_smart_money_picks()
+                _cache["macro_report"] = generate_macro_report()
                 _last_strategy_update = now
                 update_type = "🚨 긴급" if is_emergency else "📊 정기"
                 print(f"{update_type} 전략 업데이트 완료: {now.isoformat()}")
@@ -530,6 +854,26 @@ def fear_greed():
 def market_status():
     return {"status": _cache["market_status"]}
 
+@app.get("/api/smart-picks")
+def smart_picks():
+    return _cache["smart_picks"] if _cache["smart_picks"] else []
+
+@app.get("/api/macro-report")
+def macro_report():
+    return _cache["macro_report"] if _cache["macro_report"] else generate_macro_report()
+
+@app.get("/api/stock-analysis/{ticker}")
+def stock_analysis(ticker: str):
+    score_data = calculate_stock_score(ticker)
+    if not score_data:
+        return {"error": "분석 실패"}
+    analysis_text = generate_stock_analysis(ticker, score_data)
+    return {
+        "ticker": ticker,
+        "analysis": analysis_text,
+        "score": score_data,
+    }
+
 @app.get("/api/chart/{ticker}")
 def get_chart(ticker: str):
     try:
@@ -570,6 +914,8 @@ def search_stock(query: str):
             ticker = STOCK_NAME_MAP[q]
         elif q in _cache["krx_map"]:
             ticker = _cache["krx_map"][q]
+        elif any('\uac00' <= c <= '\ud7a3' for c in q):
+            return {"error": f"'{query}' 검색 실패. 국내주식은 종목코드(예: 272210)로 검색해주세요."}
         else:
             ticker = query.upper().strip()
 
@@ -616,6 +962,8 @@ async def websocket_stocks(websocket: WebSocket):
                 "is_emergency": _cache.get("is_emergency", False),
                 "emergency_reason": _cache.get("emergency_reason", None),
                 "recommendations": _cache["recommendations"],
+                "smart_picks": _cache["smart_picks"],
+                "macro_report": _cache["macro_report"],
                 "timestamp": datetime.now().isoformat(),
             }
             await websocket.send_text(json.dumps(data))
