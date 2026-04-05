@@ -760,20 +760,36 @@ def stock_analysis(ticker: str):
     return {"ticker": ticker, "analysis": generate_stock_analysis(ticker, score_data), "score": score_data}
 
 @app.get("/api/chart/{ticker}")
-def get_chart(ticker: str):
+def get_chart(ticker: str, interval: str = "5m", period: str = "5d"):
     try:
+        VALID_INTERVALS = {"1m", "5m", "60m", "1d"}
+        VALID_PERIODS   = {"1d", "5d", "1mo", "1y"}
+        if interval not in VALID_INTERVALS: interval = "5m"
+        if period not in VALID_PERIODS: period = "5d"
+
         yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
         stock = yf.Ticker(yf_ticker)
-        df = stock.history(period="1d", interval="5m")
+        df = stock.history(period=period, interval=interval)
         if df is None or len(df) == 0: return []
+
+        is_intraday = interval in ("1m", "5m", "60m")
         result = []
         for idx, row in df.iterrows():
-            result.append({
-                "time": idx.strftime("%H:%M"),
-                "open": round(float(row["Open"]), 2), "high": round(float(row["High"]), 2),
-                "low": round(float(row["Low"]), 2), "close": round(float(row["Close"]), 2),
-                "volume": int(row["Volume"]),
-            })
+            try:
+                ts = int(idx.timestamp())
+                label = idx.strftime("%H:%M") if is_intraday else idx.strftime("%Y-%m-%d")
+                result.append({
+                    "timestamp": ts,
+                    "time": label,
+                    "open":   round(float(row["Open"]),  2),
+                    "high":   round(float(row["High"]),  2),
+                    "low":    round(float(row["Low"]),   2),
+                    "close":  round(float(row["Close"]), 2),
+                    "volume": int(row["Volume"]),
+                })
+            except:
+                continue
+        result.sort(key=lambda x: x["timestamp"])
         return result
     except Exception as e:
         return {"error": str(e)}
