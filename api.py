@@ -25,6 +25,7 @@ _cache = {
     "macro_report": {},
     "news_sentiment": {},
     "sector_flow": [],
+    "kr_last_valid_price": {},  # ★ KIS 마지막 유효 체결가 보존
 }
 
 KR_STOCKS = {
@@ -138,25 +139,19 @@ EXTREME_NEGATIVE = {
 def get_reddit_wsb_sentiment():
     try:
         headers = {"User-Agent": "AI-Stock-Terminal/1.0"}
-        res = requests.get(
-            "https://www.reddit.com/r/wallstreetbets/hot.json?limit=15",
-            headers=headers, timeout=6
-        )
+        res = requests.get("https://www.reddit.com/r/wallstreetbets/hot.json?limit=15", headers=headers, timeout=6)
         data = res.json()
         posts = data.get("data", {}).get("children", [])
-        if not posts:
-            return 50, []
+        if not posts: return 50, []
         pos = 0; neg = 0; found_kw = []
         for post in posts:
             title = post.get("data", {}).get("title", "").lower()
             score_val = post.get("data", {}).get("score", 0) or 0
             weight = min(max(score_val / 1000, 0.5), 3.0)
             for kw, w in EXTREME_POSITIVE.items():
-                if kw.lower() in title:
-                    pos += w * weight; found_kw.append(f"WSB↑{kw}")
+                if kw.lower() in title: pos += w * weight; found_kw.append(f"WSB↑{kw}")
             for kw, w in EXTREME_NEGATIVE.items():
-                if kw.lower() in title:
-                    neg += w * weight; found_kw.append(f"WSB↓{kw}")
+                if kw.lower() in title: neg += w * weight; found_kw.append(f"WSB↓{kw}")
         total = pos + neg
         if total == 0: return 50, []
         return round(pos / total * 100), found_kw[:4]
@@ -172,31 +167,22 @@ def get_decisive_reason(news_list, pos_kw_found, neg_kw_found):
         for headline in news_list[:10]:
             h_lower = headline.lower()
             score = sum(1 for kw in all_extreme if kw.lower() in h_lower)
-            if score > best_score:
-                best_score = score; best_headline = headline
-        if not best_headline and news_list:
-            best_headline = news_list[0]
-        if neg_kw_found:
-            return f"'{neg_kw_found[0]}' 관련 악재 헤드라인 감지 → 부정 심리 우세"
-        elif pos_kw_found:
-            return f"'{pos_kw_found[0]}' 관련 호재 헤드라인 감지 → 긍정 심리 우세"
-        else:
-            return best_headline[:60] if best_headline else "뉴스 분석 중"
-    except:
-        return "뉴스 분석 중"
+            if score > best_score: best_score = score; best_headline = headline
+        if not best_headline and news_list: best_headline = news_list[0]
+        if neg_kw_found: return f"'{neg_kw_found[0]}' 관련 악재 헤드라인 감지 → 부정 심리 우세"
+        elif pos_kw_found: return f"'{pos_kw_found[0]}' 관련 호재 헤드라인 감지 → 긍정 심리 우세"
+        else: return best_headline[:60] if best_headline else "뉴스 분석 중"
+    except: return "뉴스 분석 중"
 
 def get_news_sentiment(news_list=None):
     try:
-        if news_list is None:
-            news_list = _cache.get("news", [])
+        if news_list is None: news_list = _cache.get("news", [])
         text = " ".join(news_list).lower()
         pos_score = 0; neg_score = 0; pos_found = []; neg_found = []
         for kw, weight in EXTREME_POSITIVE.items():
-            if kw.lower() in text:
-                pos_score += weight; pos_found.append(kw)
+            if kw.lower() in text: pos_score += weight; pos_found.append(kw)
         for kw, weight in EXTREME_NEGATIVE.items():
-            if kw.lower() in text:
-                neg_score += weight; neg_found.append(kw)
+            if kw.lower() in text: neg_score += weight; neg_found.append(kw)
         news_total = pos_score + neg_score
         news_base = round(pos_score / news_total * 100) if news_total > 0 else 50
         reddit_score, reddit_kw = get_reddit_wsb_sentiment()
@@ -418,14 +404,14 @@ def generate_macro_report():
         vix_price = vix.get("price", 20); vix_change = vix.get("change_pct", 0)
         gold_change = gold.get("change_pct", 0); oil_change = oil.get("change_pct", 0)
         dollar_change = dollar.get("change_pct", 0); ixic_change = ixic.get("change_pct", 0); ks11_change = ks11.get("change_pct", 0)
-        if vix_price > 30: market_phase = "고변동성 공포 장세"; summary = f"VIX {vix_price:.1f}로 시장 변동성이 극도로 높은 상태입니다. 투자자들의 위험 회피 심리가 강하며, 안전자산 선호가 두드러지고 있습니다. 역사적으로 VIX 30+ 구간은 중기 저점 형성 구간과 일치합니다."
-        elif vix_price > 20: market_phase = "변동성 확대 구간"; summary = f"VIX {vix_price:.1f}로 평균 이상의 변동성이 지속되고 있습니다. 단기 불확실성이 존재하나 중장기 분할 매수 기회가 형성되는 구간입니다."
-        elif vix_price > 15: market_phase = "정상 변동성 구간"; summary = f"VIX {vix_price:.1f}로 시장이 안정적인 흐름을 보이고 있습니다. 추세 추종 전략이 유효한 환경으로, 모멘텀 종목 중심의 접근이 적합합니다."
-        else: market_phase = "저변동성 강세장"; summary = f"VIX {vix_price:.1f}로 시장 변동성이 매우 낮습니다. 강세장이 지속되고 있으나 과도한 레버리지는 주의가 필요합니다."
-        if vix_price > 30 and fear_greed < 25: pattern = "2020년 3월 COVID 저점"; pattern_desc = "현재 공포지수와 VIX 수준은 2020년 3월 코로나 저점과 유사합니다. 당시 S&P500은 6개월 내 50% 이상 반등했으며, 역발상 투자자들에게 역사적 매수 기회였습니다."
-        elif vix_price > 25 and ixic_change < -3: pattern = "2022년 금리 인상 사이클"; pattern_desc = "현재 패턴은 2022년 연준의 공격적 금리 인상 초기와 유사합니다. 당시 나스닥은 고점 대비 33% 하락 후 반등했으며, 반도체·AI 중심의 단계적 분할 매수가 유효했습니다."
-        elif vix_price < 15 and fear_greed > 70: pattern = "2021년 유동성 장세"; pattern_desc = "현재 저변동성 고탐욕 환경은 2021년 유동성 장세와 유사합니다. 추세 추종이 유효하나 고평가 종목의 급락 리스크에 대비하여 분산 투자가 필요합니다."
-        else: pattern = "2019년 금리 인하 사이클"; pattern_desc = "현재 시장은 2019년 연준 금리 인하 시점과 유사한 흐름을 보입니다. 금, 채권 등 안전자산과 성장주의 혼합 포트폴리오가 유효했던 시기로, 선별적 접근이 중요합니다."
+        if vix_price > 30: market_phase = "고변동성 공포 장세"; summary = f"VIX {vix_price:.1f}로 시장 변동성이 극도로 높은 상태입니다. 역사적으로 VIX 30+ 구간은 중기 저점 형성 구간과 일치합니다."
+        elif vix_price > 20: market_phase = "변동성 확대 구간"; summary = f"VIX {vix_price:.1f}로 평균 이상의 변동성이 지속되고 있습니다. 중장기 분할 매수 기회가 형성되는 구간입니다."
+        elif vix_price > 15: market_phase = "정상 변동성 구간"; summary = f"VIX {vix_price:.1f}로 시장이 안정적인 흐름을 보이고 있습니다. 모멘텀 종목 중심의 접근이 적합합니다."
+        else: market_phase = "저변동성 강세장"; summary = f"VIX {vix_price:.1f}로 시장 변동성이 매우 낮습니다. 과도한 레버리지는 주의가 필요합니다."
+        if vix_price > 30 and fear_greed < 25: pattern = "2020년 3월 COVID 저점"; pattern_desc = "현재 공포지수와 VIX 수준은 2020년 3월 코로나 저점과 유사합니다. 당시 S&P500은 6개월 내 50% 이상 반등했습니다."
+        elif vix_price > 25 and ixic_change < -3: pattern = "2022년 금리 인상 사이클"; pattern_desc = "현재 패턴은 2022년 연준의 공격적 금리 인상 초기와 유사합니다. 반도체·AI 중심의 단계적 분할 매수가 유효했습니다."
+        elif vix_price < 15 and fear_greed > 70: pattern = "2021년 유동성 장세"; pattern_desc = "현재 저변동성 고탐욕 환경은 2021년 유동성 장세와 유사합니다. 고평가 종목의 급락 리스크에 대비하여 분산 투자가 필요합니다."
+        else: pattern = "2019년 금리 인하 사이클"; pattern_desc = "현재 시장은 2019년 연준 금리 인하 시점과 유사한 흐름을 보입니다. 선별적 접근이 중요합니다."
         opportunities = []; risks = []
         if gold_change > 0.5: opportunities.append(f"금 (GC=F +{gold_change:.1f}%): 안전자산 수요 증가. 달러 약세와 지정학적 리스크 헤지 수단으로 유효.")
         if vix_price > 25: opportunities.append("고변동성 역발상 매수: VIX 25+ 구간은 역사적으로 중기 저점 형성 구간. 우량주 분할 매수 기회.")
@@ -459,7 +445,6 @@ def get_smart_money_picks():
         print(f"스마트픽 오류: {e}")
         return []
 
-# ── 한국 시장 상태 — 8시부터 세션 세분화 ────────────────────
 def get_kr_market_status():
     try:
         kr_tz = pytz.timezone('Asia/Seoul')
@@ -467,12 +452,12 @@ def get_kr_market_status():
         t = now.hour * 60 + now.minute
         weekday = now.weekday()
         if weekday >= 5: return "휴장"
-        elif 8*60 <= t < 8*60+30:      return "호가접수"       # ★ 08:00~08:30 신규
-        elif 8*60+30 <= t < 9*60:      return "장전시간외"     # 08:30~09:00
-        elif 9*60 <= t < 15*60+30:     return "정규"           # 09:00~15:30
-        elif 15*60+30 <= t < 15*60+40: return "장마감"         # 15:30~15:40
-        elif 15*60+40 <= t < 16*60:    return "장후시간외"     # 15:40~16:00
-        elif 16*60 <= t < 18*60:       return "시간외단일가"   # 16:00~18:00
+        elif 8*60 <= t < 8*60+30:      return "호가접수"
+        elif 8*60+30 <= t < 9*60:      return "장전시간외"
+        elif 9*60 <= t < 15*60+30:     return "정규"
+        elif 15*60+30 <= t < 15*60+40: return "장마감"
+        elif 15*60+40 <= t < 16*60:    return "장후시간외"
+        elif 16*60 <= t < 18*60:       return "시간외단일가"
         else: return "장외"
     except: return "정규"
 
@@ -558,68 +543,133 @@ def update_price_history(ticker, price):
 _kis_token = None
 _kis_token_expires = None
 
-def get_kis_token():
+# ★ KIS 토큰 — 만료 30분 전 자동 갱신 + 강제 갱신 옵션
+def get_kis_token(force_refresh=False):
     global _kis_token, _kis_token_expires
-    if _kis_token and _kis_token_expires and datetime.now() < _kis_token_expires:
-        return _kis_token
-    if not KIS_APP_KEY or not KIS_APP_SECRET: return None
+    if not force_refresh and _kis_token and _kis_token_expires:
+        if datetime.now() < _kis_token_expires - timedelta(minutes=30):
+            return _kis_token
+    if not KIS_APP_KEY or not KIS_APP_SECRET:
+        return None
     try:
         url = "https://openapi.koreainvestment.com:9443/oauth2/tokenP"
         body = {"grant_type": "client_credentials", "appkey": KIS_APP_KEY, "appsecret": KIS_APP_SECRET}
-        res = requests.post(url, json=body)
+        res = requests.post(url, json=body, timeout=10)
         data = res.json()
         _kis_token = data.get("access_token")
         _kis_token_expires = datetime.now() + timedelta(hours=23)
+        print(f"✅ KIS 토큰 갱신 완료: {datetime.now().isoformat()}")
         return _kis_token
     except Exception as e:
         print(f"KIS 토큰 오류: {e}")
         return None
 
+# ★ KIS 우선 데이터 + 시간외 캐시 보존
 def get_kr_stock_kis(ticker):
     market_status = get_kr_market_status()
+    kr_tz = pytz.timezone('Asia/Seoul')
+    now_kst = datetime.now(kr_tz)
+    t_min = now_kst.hour * 60 + now_kst.minute
+
     try:
         token = get_kis_token()
         if not token:
             result = get_kr_stock_yf(ticker)
+            # 캐시된 유효 가격이 있으면 우선 사용
+            if ticker in _cache["kr_last_valid_price"] and result:
+                cached = _cache["kr_last_valid_price"][ticker]
+                result["price"] = cached["price"]
+                result["change"] = cached["change"]
+                result["change_pct"] = cached["change_pct"]
+                result["source"] = f"{cached['source']}(캐시)"
             if result: result["market_status"] = market_status
             return result
+
         url = "https://openapi.koreainvestment.com:9443/uapi/domestic-stock/v1/quotations/inquire-price"
-        headers = {"authorization": f"Bearer {token}", "appkey": KIS_APP_KEY, "appsecret": KIS_APP_SECRET, "tr_id": "FHKST01010100"}
+        headers = {
+            "authorization": f"Bearer {token}",
+            "appkey": KIS_APP_KEY,
+            "appsecret": KIS_APP_SECRET,
+            "tr_id": "FHKST01010100",
+        }
         params = {"fid_cond_mrkt_div_code": "J", "fid_input_iscd": ticker}
-        res = requests.get(url, headers=headers, params=params)
+        res = requests.get(url, headers=headers, params=params, timeout=5)
         data = res.json().get("output", {})
         price = float(data.get("stck_prpr", 0))
         change = float(data.get("prdy_vrss", 0))
         change_pct = float(data.get("prdy_ctrt", 0))
+        source = "KIS실시간"
 
-        # ── 호가접수 구간: 장전 예상 체결가 병렬 조회 ──
+        # 호가접수 / 장전시간외: 예상 체결가 조회
         if market_status in ("호가접수", "장전시간외"):
             try:
                 headers2 = {**headers, "tr_id": "FHKST01010400"}
-                res2 = requests.get(url, headers=headers2, params=params)
+                res2 = requests.get(url, headers=headers2, params=params, timeout=5)
                 data2 = res2.json().get("output", {})
                 pre_price = float(data2.get("ovtm_untp_prpr", 0) or 0)
                 if pre_price > 0:
                     price = pre_price
                     change = float(data2.get("ovtm_untp_prdy_vrss", 0) or 0)
                     change_pct = float(data2.get("ovtm_untp_prdy_ctrt", 0) or 0)
+                    source = "KIS장전"
             except: pass
 
-        if market_status == "시간외단일가":
+        # ★ 시간외단일가(16~18시) + 장후(18~20시): 시간외 가격 조회
+        if market_status in ("시간외단일가", "장후시간외") or (18*60 <= t_min < 20*60):
             try:
                 headers2 = {**headers, "tr_id": "FHKST01010400"}
-                res2 = requests.get(url, headers=headers2, params=params)
+                res2 = requests.get(url, headers=headers2, params=params, timeout=5)
                 data2 = res2.json().get("output", {})
                 ot_price = float(data2.get("ovtm_untp_prpr", 0) or 0)
                 if ot_price > 0:
                     price = ot_price
                     change = float(data2.get("ovtm_untp_prdy_vrss", 0) or 0)
                     change_pct = float(data2.get("ovtm_untp_prdy_ctrt", 0) or 0)
+                    source = "KIS시간외"
             except: pass
 
-        update_price_history(ticker, price)
-        return {"ticker": ticker, "name": KR_STOCKS.get(ticker, ticker), "price": price, "change": change, "change_pct": change_pct, "currency": "KRW", "source": "KIS실시간", "market_status": market_status, "updated": datetime.now().isoformat()}
-    except:
+        # ★ 유효한 가격이면 캐시 저장 (장외에서도 마지막 유효가 보존)
+        if price > 0:
+            _cache["kr_last_valid_price"][ticker] = {
+                "price": price, "change": change,
+                "change_pct": change_pct, "source": source,
+                "saved_at": datetime.now().isoformat(),
+            }
+            update_price_history(ticker, price)
+            return {
+                "ticker": ticker, "name": KR_STOCKS.get(ticker, ticker),
+                "price": price, "change": change, "change_pct": change_pct,
+                "currency": "KRW", "source": source,
+                "market_status": market_status, "updated": datetime.now().isoformat(),
+            }
+        else:
+            # KIS가 0 반환 → 캐시된 마지막 유효가 사용
+            if ticker in _cache["kr_last_valid_price"]:
+                cached = _cache["kr_last_valid_price"][ticker]
+                print(f"⚠️ {ticker} KIS 0반환 → 캐시 사용: {cached['price']}")
+                return {
+                    "ticker": ticker, "name": KR_STOCKS.get(ticker, ticker),
+                    "price": cached["price"], "change": cached["change"],
+                    "change_pct": cached["change_pct"], "currency": "KRW",
+                    "source": f"{cached['source']}(캐시)",
+                    "market_status": market_status, "updated": datetime.now().isoformat(),
+                }
+            result = get_kr_stock_yf(ticker)
+            if result: result["market_status"] = market_status
+            return result
+
+    except Exception as e:
+        print(f"KIS 오류 {ticker}: {e}")
+        # 오류 시에도 캐시된 유효가 우선
+        if ticker in _cache["kr_last_valid_price"]:
+            cached = _cache["kr_last_valid_price"][ticker]
+            return {
+                "ticker": ticker, "name": KR_STOCKS.get(ticker, ticker),
+                "price": cached["price"], "change": cached["change"],
+                "change_pct": cached["change_pct"], "currency": "KRW",
+                "source": f"{cached['source']}(캐시)",
+                "market_status": market_status, "updated": datetime.now().isoformat(),
+            }
         result = get_kr_stock_yf(ticker)
         if result: result["market_status"] = market_status
         return result
@@ -655,8 +705,7 @@ def analyze_news_keywords(news_list):
     bad_keywords = {"war": 0.05, "전쟁": 0.05, "sanction": 0.04, "제재": 0.04, "ban": 0.03, "규제": 0.03, "crash": 0.04, "crisis": 0.03, "rate hike": 0.03, "금리": 0.02, "tariff": 0.04, "관세": 0.04, "recession": 0.04, "침체": 0.04, "default": 0.05, "파산": 0.05, "inflation": 0.02, "인플레": 0.02}
     discount = 0.0; triggered = []
     for keyword, weight in bad_keywords.items():
-        if keyword in text:
-            discount += weight; triggered.append(keyword)
+        if keyword in text: discount += weight; triggered.append(keyword)
     return min(discount, 0.15), triggered
 
 def get_sniper_scenario(fear_greed, discount, triggered, is_emergency=False, emergency_reason=None):
@@ -677,6 +726,9 @@ def calculate_recommendation(ticker, is_emergency=False, emergency_reason=None):
         if df is None or len(df) == 0: return None
         price = float(df["Close"].dropna().iloc[-1])
         if price != price: return None
+        # ★ KIS 캐시 가격이 있으면 우선 사용
+        if ticker in _cache["kr_last_valid_price"]:
+            price = _cache["kr_last_valid_price"][ticker]["price"]
         news_list = _cache.get("news", [])
         fear_greed_score = _cache.get("fear_greed", 50)
         macro = _cache.get("macro", {})
@@ -692,7 +744,7 @@ def calculate_recommendation(ticker, is_emergency=False, emergency_reason=None):
         return None
 
 _last_strategy_update = None
-_last_morning_wake = None   # 아침 8시 강제 깨우기 추적
+_last_morning_wake = None
 
 async def background_updater():
     global _last_strategy_update, _last_morning_wake
@@ -703,13 +755,19 @@ async def background_updater():
             t_min = now_kst.hour * 60 + now_kst.minute
             weekday = now_kst.weekday()
 
-            # ── 아침 8시 강제 깨우기 (평일 08:00~08:05 한 번만) ──
+            # ★ 매시 정각 KIS 토큰 자동 갱신
+            now_check = datetime.now()
+            if now_check.minute == 0 and now_check.second < 10:
+                get_kis_token(force_refresh=True)
+
+            # 아침 8시 강제 깨우기
             is_morning_open = (weekday < 5 and 8*60 <= t_min < 8*60+5)
             morning_date = now_kst.date()
             if is_morning_open and _last_morning_wake != morning_date:
                 print("🌅 08:00 장 개장 준비 — 전략/감성 강제 재계산")
-                _last_strategy_update = None   # 강제 재계산 트리거
+                _last_strategy_update = None
                 _last_morning_wake = morning_date
+                get_kis_token(force_refresh=True)  # ★ 장 시작 시 토큰 강제 갱신
 
             _cache["market_status"] = get_kr_market_status()
             _cache["kr"] = [get_kr_stock_kis(t) for t in KR_STOCKS]
@@ -747,7 +805,9 @@ async def background_updater():
             _cache["is_emergency"] = is_emergency
             _cache["emergency_reason"] = emergency_reason
             s = _cache["news_sentiment"]
-            print(f"✅ {_cache['timestamp']} | {_cache['market_status']} | 심리:{s.get('score','?')}({s.get('label','?')})")
+            # 캐시 상태 로그
+            cached_count = len(_cache["kr_last_valid_price"])
+            print(f"✅ {_cache['timestamp']} | {_cache['market_status']} | 심리:{s.get('score','?')} | KIS캐시:{cached_count}종목")
         except Exception as e:
             print(f"업데이트 오류: {e}")
         await asyncio.sleep(5)
@@ -755,6 +815,9 @@ async def background_updater():
 @asynccontextmanager
 async def lifespan(app):
     _cache["krx_map"] = load_krx_stock_list()
+    # ★ 앱 시작 시 KIS 토큰 즉시 발급
+    token = get_kis_token(force_refresh=True)
+    print(f"🚀 앱 시작 | KIS토큰: {'✅' if token else '❌'}")
     asyncio.create_task(background_updater())
     yield
 
@@ -763,7 +826,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 @app.get("/")
 def root():
-    return {"status": "AI Stock Terminal API 🚀", "timestamp": datetime.now().isoformat()}
+    cached_prices = {k: v["price"] for k, v in _cache["kr_last_valid_price"].items()}
+    return {"status": "AI Stock Terminal API 🚀", "timestamp": datetime.now().isoformat(), "kis_token": "✅ 활성" if _kis_token else "❌ 없음", "cached_prices": cached_prices}
 
 @app.get("/api/kr-stocks")
 def kr_stocks():
@@ -803,7 +867,6 @@ def stock_analysis(ticker: str):
     if not score_data: return {"error": "분석 실패"}
     return {"ticker": ticker, "analysis": generate_stock_analysis(ticker, score_data), "score": score_data}
 
-# ── 차트 — KST 타임스탬프 반환 ───────────────────────────────
 @app.get("/api/chart/{ticker}")
 def get_chart(ticker: str, interval: str = "5m", period: str = "5d"):
     try:
@@ -825,29 +888,35 @@ def get_chart(ticker: str, interval: str = "5m", period: str = "5d"):
         result = []
         for idx, row in df.iterrows():
             try:
-                # ★ 핵심: tz-naive 타임스탬프를 올바른 타임존으로 localize
                 if idx.tzinfo is None:
-                    # 국장: KST, 미장: ET로 localize → UTC unix으로 변환
                     local_tz = kr_tz if is_kr else et_tz
                     idx = idx.tz_localize(local_tz)
-
-                # 항상 정확한 UTC unix timestamp
                 ts = int(idx.timestamp())
                 label = idx.strftime("%H:%M") if is_intraday else idx.strftime("%Y-%m-%d")
-
                 result.append({
-                    "timestamp": ts,
-                    "time":      label,
+                    "timestamp": ts, "time": label,
                     "open":   round(float(row["Open"]),  2),
                     "high":   round(float(row["High"]),  2),
                     "low":    round(float(row["Low"]),   2),
                     "close":  round(float(row["Close"]), 2),
                     "volume": int(row["Volume"]),
                 })
-            except:
-                continue
+            except: continue
 
         result.sort(key=lambda x: x["timestamp"])
+
+        # ★ 캐시된 KIS 실시간 가격으로 마지막 캔들 덮어쓰기
+        if is_kr and ticker in _cache["kr_last_valid_price"] and result:
+            cached = _cache["kr_last_valid_price"][ticker]
+            live_price = cached["price"]
+            last = result[-1]
+            result[-1] = {
+                **last,
+                "close": live_price,
+                "high":  max(last["high"], live_price),
+                "low":   min(last["low"],  live_price),
+            }
+
         return result
     except Exception as e:
         return {"error": str(e)}
@@ -879,10 +948,18 @@ def search_stock(query: str):
             if df is None or len(df) == 0: return {"error": f"'{query}' 종목을 찾을 수 없습니다"}
             price = float(df["Close"].dropna().iloc[-1])
             prev  = float(df["Close"].dropna().iloc[-2]) if len(df) > 1 else price
-        change = price - prev
-        change_pct = (change / prev) * 100 if prev else 0
+        # ★ KIS 캐시 가격 우선
+        is_kr = len(ticker) == 6 and ticker.isdigit()
+        if is_kr and ticker in _cache["kr_last_valid_price"]:
+            cached = _cache["kr_last_valid_price"][ticker]
+            price = cached["price"]
+            change = cached["change"]
+            change_pct = cached["change_pct"]
+        else:
+            change = price - prev
+            change_pct = (change / prev) * 100 if prev else 0
         rec = calculate_recommendation(ticker)
-        return {"ticker": ticker, "price": round(price, 2), "change": round(change, 2), "change_pct": round(change_pct, 2), "currency": "KRW" if len(ticker) == 6 and ticker.isdigit() else "USD", "recommendation": rec}
+        return {"ticker": ticker, "price": round(price, 2), "change": round(change, 2), "change_pct": round(change_pct, 2), "currency": "KRW" if is_kr else "USD", "recommendation": rec}
     except Exception as e:
         return {"error": f"검색 실패: {str(e)}"}
 
