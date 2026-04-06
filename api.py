@@ -970,6 +970,100 @@ def news_sentiment():
 @app.get("/api/sector-flow")
 def sector_flow():
     return _cache["sector_flow"] if _cache["sector_flow"] else get_sector_flow()
+# ★ GPT 스타일 — 순수 기술적 지표 중심 타점
+def calculate_recommendation_tech(ticker):
+    try:
+        yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
+        stock = yf.Ticker(yf_ticker)
+        df = stock.history(period="3mo", interval="1d")
+        if df is None or len(df) < 20: return None
+
+        prices = df["Close"].dropna().tolist()
+        volumes = df["Volume"].dropna().tolist()
+
+        # KIS 캐시 가격 우선
+        if ticker in _cache["kr_last_valid_price"]:
+            price = _cache["kr_last_valid_price"][ticker]["price"]
+        else:
+            price = prices[-1]
+
+        # 이동평균선
+        ma5   = sum(prices[-5:])  / 5  if len(prices) >= 5  else price
+        ma20  = sum(prices[-20:]) / 20 if len(prices) >= 20 else price
+        ma60  = sum(prices[-60:]) / 60 if len(prices) >= 60 else price
+
+        # RSI
+        rsi = calculate_rsi(prices[-30:] if len(prices) >= 30 else prices)
+
+        # 볼린저 밴드 (20일)
+        if len(prices) >= 20:
+            std20 = (sum((p - ma20)**2 for p in prices[-20:]) / 20) ** 0.5
+            bb_lower = ma20 - 2 * std20
+            bb_upper = ma20 + 2 * std20
+        else:
+            bb_lower = price * 0.95
+            bb_upper = price * 1.05
+
+        # 지지선: MA20, 볼린저 하단, MA60 중 가장 의미있는 구간
+        support1 = min(ma20, bb_lower) * 0.995   # 1차: MA20 / 볼린저 하단
+        support2 = ma60 * 0.985                   # 2차: MA60
+        support3 = min(prices[-60:]) * 1.01 if len(prices) >= 60 else price * 0.87  # 3차: 60일 저점
+
+        # RSI 과매도 보정
+        if rsi < 30:
+            support1 *= 0.99
+            support2 *= 0.98
+
+        # VIX 변동성 보정
+        macro = _cache.get("macro", {})
+        vix = macro.get("^VIX", {}).get("price", 20)
+        if vix > 30:
+            support1 *= 0.97; support2 *= 0.96; support3 *= 0.95
+
+        # 목표가: 볼린저 상단 or MA20 회귀
+        target = max(bb_upper, ma20 * 1.05)
+        stop   = bb_lower * 0.97
+
+        # 시나리오 문구 (기술적)
+        if rsi < 35:
+            scenario = f"RSI {rsi} 과매도 + 볼린저 하단 이탈 — 기술적 반등 구간. MA20({round(ma20):,}) 회복 시 추세 전환 신호."
+        elif price < ma20:
+            scenario = f"현재가 MA20({round(ma20):,}) 하회 중 — 이평선 저항 구간. MA20 돌파 확인 후 분할 진입 권장."
+        elif price > bb_upper:
+            scenario = f"볼린저 상단 돌파 — 단기 과열 구간. 눌림목({round(ma20):,}) 대기 후 재진입."
+        else:
+            scenario = f"MA5({round(ma5):,}) > MA20({round(ma20):,}) 정배열 유지 중. 추세 추종 분할 매수 유효."
+
+        return {
+            "ticker": ticker,
+            "current": price,
+            "buy1": round(support1, 2),
+            "buy2": round(support2, 2),
+            "buy3": round(support3, 2),
+            "sell": round(target, 2),
+            "stop_loss": round(stop, 2),
+            "scenario": scenario,
+            "is_bad_news": False,
+            "discount_pct": 0,
+            "is_emergency": False,
+            "currency": "KRW" if len(ticker) == 6 and ticker.isdigit() else "USD",
+            "updated_at": datetime.now().isoformat(),
+            "model": "GPT",
+            "indicators": {
+                "rsi": rsi, "ma5": round(ma5, 2),
+                "ma20": round(ma20, 2), "ma60": round(ma60, 2),
+                "bb_upper": round(bb_upper, 2), "bb_lower": round(bb_lower, 2),
+            }
+        }
+    except Exception as e:
+        print(f"기술적 추천 오류 {ticker}: {e}")
+        return None
+
+@app.get("/api/recommend-tech/{ticker}")
+def get_recommend_tech(ticker: str):
+    rec = calculate_recommendation_tech(ticker)
+    if rec: return rec
+    return {"error": "기술적 분석 실패"}
 
 @app.websocket("/ws/stocks")
 async def websocket_stocks(websocket: WebSocket):
