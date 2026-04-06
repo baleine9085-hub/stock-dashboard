@@ -811,21 +811,32 @@ def get_chart(ticker: str, interval: str = "5m", period: str = "5d"):
         VALID_PERIODS   = {"1d", "5d", "1mo", "1y"}
         if interval not in VALID_INTERVALS: interval = "5m"
         if period not in VALID_PERIODS: period = "5d"
-        yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
+
+        is_kr = len(ticker) == 6 and ticker.isdigit()
+        yf_ticker = f"{ticker}.KS" if is_kr else ticker
         stock = yf.Ticker(yf_ticker)
         df = stock.history(period=period, interval=interval)
         if df is None or len(df) == 0: return []
+
         is_intraday = interval in ("1m", "5m", "60m")
-        KST_OFFSET = 9 * 3600   # ★ UTC → KST 9시간 보정
+        kr_tz = pytz.timezone('Asia/Seoul')
+        et_tz = pytz.timezone('America/New_York')
+
         result = []
         for idx, row in df.iterrows():
             try:
-                # tz-aware → UTC unix → KST 보정
-                utc_ts = int(idx.timestamp())
-                kst_ts = utc_ts + KST_OFFSET
-                label  = idx.strftime("%H:%M") if is_intraday else idx.strftime("%Y-%m-%d")
+                # ★ 핵심: tz-naive 타임스탬프를 올바른 타임존으로 localize
+                if idx.tzinfo is None:
+                    # 국장: KST, 미장: ET로 localize → UTC unix으로 변환
+                    local_tz = kr_tz if is_kr else et_tz
+                    idx = idx.tz_localize(local_tz)
+
+                # 항상 정확한 UTC unix timestamp
+                ts = int(idx.timestamp())
+                label = idx.strftime("%H:%M") if is_intraday else idx.strftime("%Y-%m-%d")
+
                 result.append({
-                    "timestamp": kst_ts,   # ★ KST 기준 타임스탬프
+                    "timestamp": ts,
                     "time":      label,
                     "open":   round(float(row["Open"]),  2),
                     "high":   round(float(row["High"]),  2),
@@ -833,7 +844,9 @@ def get_chart(ticker: str, interval: str = "5m", period: str = "5d"):
                     "close":  round(float(row["Close"]), 2),
                     "volume": int(row["Volume"]),
                 })
-            except: continue
+            except:
+                continue
+
         result.sort(key=lambda x: x["timestamp"])
         return result
     except Exception as e:
