@@ -745,13 +745,27 @@ def get_kr_stock_yf(ticker):
 def get_us_stock(ticker):
     try:
         stock = yf.Ticker(ticker)
-        info = stock.fast_info
-        price = info.last_price
-        prev_close = info.previous_close
-        change = price - prev_close
-        change_pct = (change / prev_close) * 100
+        # ★ prepost=True로 프리/애프터 실시간 포함
+        df = stock.history(period="1d", interval="1m", prepost=True)
+        if df is not None and len(df) > 0:
+            price = float(df["Close"].dropna().iloc[-1])
+            prev_close = float(stock.fast_info.previous_close)
+            change = price - prev_close
+            change_pct = (change / prev_close) * 100 if prev_close else 0
+        else:
+            info = stock.fast_info
+            price = float(info.last_price)
+            prev_close = float(info.previous_close)
+            change = price - prev_close
+            change_pct = (change / prev_close) * 100
         update_price_history(ticker, price)
-        return {"ticker": ticker, "name": US_STOCKS.get(ticker, ticker), "price": round(price, 2), "change": round(change, 2), "change_pct": round(change_pct, 2), "currency": "USD", "source": "yfinance", "market_status": get_us_market_status(), "updated": datetime.now().isoformat()}
+        return {
+            "ticker": ticker, "name": US_STOCKS.get(ticker, ticker),
+            "price": round(price, 2), "change": round(change, 2),
+            "change_pct": round(change_pct, 2), "currency": "USD",
+            "source": "yfinance", "market_status": get_us_market_status(),
+            "updated": datetime.now().isoformat()
+        }
     except Exception as e:
         return {"ticker": ticker, "name": US_STOCKS.get(ticker, ticker), "error": str(e)}
 
