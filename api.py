@@ -1125,9 +1125,7 @@ def calculate_recommendation_tech(ticker):
         stock = yf.Ticker(yf_ticker)
         df = stock.history(period="3mo", interval="1d")
         if df is None or len(df) < 20: return None
-
         prices = df["Close"].dropna().tolist()
-        volumes = df["Volume"].dropna().tolist()
 
         # KIS 캐시 가격 우선
         if ticker in _cache["kr_last_valid_price"]:
@@ -1135,44 +1133,61 @@ def calculate_recommendation_tech(ticker):
         else:
             price = prices[-1]
 
-        # 이동평균선
-        ma5   = sum(prices[-5:])  / 5  if len(prices) >= 5  else price
-        ma20  = sum(prices[-20:]) / 20 if len(prices) >= 20 else price
-        ma60  = sum(prices[-60:]) / 60 if len(prices) >= 60 else price
+        ma5  = sum(prices[-5:])  / 5  if len(prices) >= 5  else price
+        ma20 = sum(prices[-20:]) / 20 if len(prices) >= 20 else price
+        ma60 = sum(prices[-60:]) / 60 if len(prices) >= 60 else price
 
-        # RSI
         rsi = calculate_rsi(prices[-30:] if len(prices) >= 30 else prices)
 
-        # 볼린저 밴드 (20일)
         if len(prices) >= 20:
-            std20 = (sum((p - ma20)**2 for p in prices[-20:]) / 20) ** 0.5
+            std20    = (sum((p - ma20)**2 for p in prices[-20:]) / 20) ** 0.5
             bb_lower = ma20 - 2 * std20
             bb_upper = ma20 + 2 * std20
         else:
             bb_lower = price * 0.95
             bb_upper = price * 1.05
 
-        # 지지선: MA20, 볼린저 하단, MA60 중 가장 의미있는 구간
-        support1 = min(ma20, bb_lower) * 0.995   # 1차: MA20 / 볼린저 하단
-        support2 = ma60 * 0.985                   # 2차: MA60
-        support3 = min(prices[-60:]) * 1.01 if len(prices) >= 60 else price * 0.87  # 3차: 60일 저점
-
-        # RSI 과매도 보정
-        if rsi < 30:
-            support1 *= 0.99
-            support2 *= 0.98
-
-        # VIX 변동성 보정
         macro = _cache.get("macro", {})
-        vix = macro.get("^VIX", {}).get("price", 20)
+        vix   = macro.get("^VIX", {}).get("price", 20)
+
+        # ★ 핵심: 현재가보다 높은 지표는 타점으로 사용 안 함
+        candidates = []
+        if ma20 < price:    candidates.append(ma20 * 0.995)
+        if bb_lower < price: candidates.append(bb_lower * 0.995)
+        if ma60 < price:    candidates.append(ma60 * 0.985)
+
+        # 60일 저점
+        hist_low = min(prices[-60:]) if len(prices) >= 60 else price * 0.75
+        if hist_low < price: candidates.append(hist_low * 1.01)
+
+        # 후보가 없으면 현재가 기준 % 할인으로 생성
+        if len(candidates) == 0:
+            candidates = [price * 0.93, price * 0.87, price * 0.75]
+        elif len(candidates) == 1:
+            candidates.append(candidates[0] * 0.90)
+            candidates.append(candidates[0] * 0.80)
+        elif len(candidates) == 2:
+            candidates.append(min(candidates) * 0.88)
+
+        # ★ 내림차순 정렬 후 3개 선택
+        candidates = sorted(set([round(c, 2) for c in candidates]), reverse=True)
+
+        support1 = candidates[0]
+        support2 = candidates[1]
+        support3 = candidates[2] if len(candidates) > 2 else candidates[1] * 0.88
+
+        # ★ VIX 가중치
         if vix > 30:
             support1 *= 0.97; support2 *= 0.96; support3 *= 0.95
 
-        # 목표가: 볼린저 상단 or MA20 회귀
-        target = max(bb_upper, ma20 * 1.05)
-        stop   = bb_lower * 0.97
+        # ★ 타점 역전 방지 (안전장치)
+        support1 = min(support1, price * 0.97)   # 반드시 현재가 아래
+        support2 = min(support2, support1 * 0.90) # 1차보다 아래
+        support3 = min(support3, support2 * 0.88) # 2차보다 아래
 
-        # 시나리오 문구 (기술적)
+        target = max(bb_upper, ma20 * 1.05) if bb_upper > price else price * 1.08
+        stop   = round(support3 * 0.93, 2)
+
         if rsi < 35:
             scenario = f"RSI {rsi} 과매도 + 볼린저 하단 이탈 — 기술적 반등 구간. MA20({round(ma20):,}) 회복 시 추세 전환 신호."
         elif price < ma20:
@@ -1180,20 +1195,17 @@ def calculate_recommendation_tech(ticker):
         elif price > bb_upper:
             scenario = f"볼린저 상단 돌파 — 단기 과열 구간. 눌림목({round(ma20):,}) 대기 후 재진입."
         else:
-            scenario = f"MA5({round(ma5):,}) > MA20({round(ma20):,}) 정배열 유지 중. 추세 추종 분할 매수 유효."
+            scenario = f"MA5({round(ma5):,}) 기준 추세 추종 구간. 분할 매수 유효."
 
         return {
-            "ticker": ticker,
-            "current": price,
+            "ticker": ticker, "current": price,
             "buy1": round(support1, 2),
             "buy2": round(support2, 2),
             "buy3": round(support3, 2),
             "sell": round(target, 2),
-            "stop_loss": round(stop, 2),
+            "stop_loss": stop,
             "scenario": scenario,
-            "is_bad_news": False,
-            "discount_pct": 0,
-            "is_emergency": False,
+            "is_bad_news": False, "discount_pct": 0, "is_emergency": False,
             "currency": "KRW" if len(ticker) == 6 and ticker.isdigit() else "USD",
             "updated_at": datetime.now().isoformat(),
             "model": "GPT",
