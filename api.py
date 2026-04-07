@@ -178,15 +178,50 @@ def get_news_sentiment(news_list=None):
     try:
         if news_list is None: news_list = _cache.get("news", [])
         text = " ".join(news_list).lower()
+
         pos_score = 0; neg_score = 0; pos_found = []; neg_found = []
         for kw, weight in EXTREME_POSITIVE.items():
             if kw.lower() in text: pos_score += weight; pos_found.append(kw)
         for kw, weight in EXTREME_NEGATIVE.items():
             if kw.lower() in text: neg_score += weight; neg_found.append(kw)
+
+        # ★ 위험 키워드 24시간 메모리
+        HIGH_RISK_KEYWORDS = ["war", "전쟁", "missile", "미사일", "nuclear", "핵", "이란", "iran", "북한", "invasion", "침공", "폭격"]
+        now = datetime.now()
+        risk_memory = _cache.get("risk_keyword_memory", {})
+
+        # 현재 뉴스에서 위험 키워드 감지 → 메모리 저장
+        for kw in HIGH_RISK_KEYWORDS:
+            if kw.lower() in text:
+                risk_memory[kw] = now.isoformat()
+
+        # 24시간 지난 메모리 삭제
+        expired = [k for k, v in risk_memory.items()
+                   if (now - datetime.fromisoformat(v)).total_seconds() > 86400]
+        for k in expired: del risk_memory[k]
+        _cache["risk_keyword_memory"] = risk_memory
+
+        # ★ 메모리에 위험 키워드 남아있으면 추가 패널티
+        memory_penalty = 0
+        active_risks = []
+        for kw, ts in risk_memory.items():
+            hours_ago = (now - datetime.fromisoformat(ts)).total_seconds() / 3600
+            if hours_ago < 6:    penalty = 25  # 6시간 이내: 강력 패널티
+            elif hours_ago < 12: penalty = 18  # 12시간 이내
+            elif hours_ago < 24: penalty = 10  # 24시간 이내
+            else: penalty = 0
+            memory_penalty += penalty
+            active_risks.append(f"{kw}({int(hours_ago)}h전)")
+        memory_penalty = min(memory_penalty, 40)  # 최대 -40점
+
         news_total = pos_score + neg_score
         news_base = round(pos_score / news_total * 100) if news_total > 0 else 50
         reddit_score, reddit_kw = get_reddit_wsb_sentiment()
         combined = round(news_base * 0.7 + reddit_score * 0.3)
+
+        # 위험 키워드 메모리 패널티 적용
+        combined = max(0, combined - memory_penalty)
+
         macro = _cache.get("macro", {})
         vix = macro.get("^VIX", {}).get("price", 20)
         vix_change = macro.get("^VIX", {}).get("change_pct", 0)
@@ -197,7 +232,13 @@ def get_news_sentiment(news_list=None):
         if vix_change > 10: vix_penalty -= 8
         elif vix_change > 5: vix_penalty -= 4
         combined = max(0, min(100, combined + vix_penalty))
-        if 45 <= combined <= 55:
+
+        # ★ VIX 하드 캡: VIX 20 이상이면 최대 50점(중립)
+        if vix >= 20:
+            combined = min(combined, 50)
+            print(f"⚠️ VIX {vix:.1f} → 감성 점수 하드캡 50 적용: {combined}")
+
+        if 45 <= combined <= 55 and vix < 20:  # VIX 낮을 때만 극단값 조정
             extreme_neg = sum(1 for kw in ["war","crash","bankruptcy","폭락","전쟁","파산","recession","침체","collapse"] if kw in text)
             extreme_pos = sum(1 for kw in ["record high","breakthrough","surge","폭등","최고치","급등","boom"] if kw in text)
             if extreme_neg > extreme_pos: combined = min(combined - 12, 42)
@@ -206,14 +247,25 @@ def get_news_sentiment(news_list=None):
             elif pos_score > neg_score: combined = max(combined + 8, 56)
             elif vix > 20: combined = min(combined - 6, 44)
             else: combined = max(combined + 6, 56)
+
         if combined <= 30: label, color, alert_level = "극단적 공포 🚨", "#dc2626", "danger"
         elif combined <= 40: label, color, alert_level = "강한 부정 📉", "#ff3b3b", "warning"
         elif combined <= 60: label, color, alert_level = "관망 ⚠️", "#facc15", "caution"
         elif combined <= 70: label, color, alert_level = "긍정 📈", "#84cc16", "ok"
         else: label, color, alert_level = "극단적 탐욕 🤑", "#22c55e", "bull"
+
         neg_ratio = 100 - combined
         all_pos_kw = pos_found[:3] + [k.replace("WSB↑","") for k in reddit_kw if "↑" in k][:2]
         all_neg_kw = neg_found[:3] + [k.replace("WSB↓","") for k in reddit_kw if "↓" in k][:2]
+
+        # 활성 위험 메모리 키워드도 부정 키워드에 표시
+        if active_risks:
+            all_neg_kw = list(dict.fromkeys(all_neg_kw + [r.split("(")[0] for r in active_risks]))[:5]
+
+        decisive = get_decisive_reason(news_list, pos_found, neg_found)
+        if active_risks and memory_penalty > 0:
+            decisive = f"⚠️ 위험 메모리 활성: {', '.join(active_risks[:2])} → 감성 {memory_penalty}점 차감 유지"
+
         return {
             "score": combined, "pos_ratio": combined, "neg_ratio": neg_ratio,
             "pos_score": pos_score, "neg_score": neg_score,
@@ -222,7 +274,9 @@ def get_news_sentiment(news_list=None):
             "label": label, "color": color, "alert_level": alert_level,
             "is_danger": neg_ratio >= 70 or combined <= 30,
             "reddit_score": reddit_score, "vix_penalty": vix_penalty,
-            "decisive_reason": get_decisive_reason(news_list, pos_found, neg_found),
+            "memory_penalty": memory_penalty,
+            "active_risks": active_risks[:3],
+            "decisive_reason": decisive,
             "news_count": len(news_list), "updated_at": datetime.now().isoformat(),
         }
     except Exception as e:
