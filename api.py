@@ -26,6 +26,7 @@ _cache = {
     "news_sentiment": {},
     "sector_flow": [],
     "kr_last_valid_price": {},  # ★ KIS 마지막 유효 체결가 보존
+    "risk_keyword_memory": {},   #
 }
 
 KR_STOCKS = {
