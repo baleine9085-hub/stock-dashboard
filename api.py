@@ -777,23 +777,116 @@ def calculate_recommendation(ticker, is_emergency=False, emergency_reason=None):
     try:
         yf_ticker = f"{ticker}.KS" if len(ticker) == 6 and ticker.isdigit() else ticker
         stock = yf.Ticker(yf_ticker)
-        df = stock.history(period="1mo", interval="1d")
+        df = stock.history(period="6mo", interval="1d")
         if df is None or len(df) == 0: return None
-        price = float(df["Close"].dropna().iloc[-1])
-        if price != price: return None
-        # ★ KIS 캐시 가격이 있으면 우선 사용
+        prices = df["Close"].dropna().tolist()
+        if len(prices) == 0: return None
+
+        # ★ 현재가: KIS 캐시 우선
         if ticker in _cache["kr_last_valid_price"]:
             price = _cache["kr_last_valid_price"][ticker]["price"]
-        news_list = _cache.get("news", [])
-        fear_greed_score = _cache.get("fear_greed", 50)
+        else:
+            price = prices[-1]
+
+        # ★ 이동평균선 계산
+        ma20  = sum(prices[-20:])  / min(20,  len(prices))
+        ma60  = sum(prices[-60:])  / min(60,  len(prices))
+        ma120 = sum(prices[-120:]) / min(120, len(prices)) if len(prices) >= 60 else ma60
+
+        # ★ 2주 박스권 하단 (14일 최저)
+        box_low = min(prices[-14:]) if len(prices) >= 14 else price * 0.93
+
+        # ★ RSI
+        rsi = calculate_rsi(prices[-30:] if len(prices) >= 30 else prices)
+
+        # ★ VIX 변동성 가중치
         macro = _cache.get("macro", {})
-        vix = macro.get("^VIX", {}).get("price", 0)
+        vix = macro.get("^VIX", {}).get("price", 20)
+        vix_multiplier = 1.0
+        if vix > 40:   vix_multiplier = 1.30  # 극단적 공포
+        elif vix > 30: vix_multiplier = 1.20
+        elif vix > 25: vix_multiplier = 1.12
+        elif vix > 20: vix_multiplier = 1.06
+        else:          vix_multiplier = 1.00
+
+        # ★ 뉴스 심리 가중치
+        news_list = _cache.get("news", [])
         discount, triggered = analyze_news_keywords(news_list)
-        if is_emergency: discount = min(discount + 0.05, 0.20)
-        if vix > 30: discount = min(discount + 0.05, 0.20)
-        elif vix > 20: discount = min(discount + 0.02, 0.20)
+
+        # ★ 위험 키워드 메모리 추가 패널티
+        risk_memory = _cache.get("risk_keyword_memory", {})
+        now = datetime.now()
+        extra_discount = 0.0
+        for kw, ts in risk_memory.items():
+            hours_ago = (now - datetime.fromisoformat(ts)).total_seconds() / 3600
+            if hours_ago < 6:    extra_discount += 0.06
+            elif hours_ago < 12: extra_discount += 0.04
+            elif hours_ago < 24: extra_discount += 0.02
+        extra_discount = min(extra_discount, 0.15)
+        discount = min(discount + extra_discount, 0.20)
+
+        if is_emergency: discount = min(discount + 0.05, 0.25)
+
+        # ★ 동적 타점 계산
+        # 1차: 2주 박스권 하단 or MA20 중 낮은 값 → -7~10% 수준
+        buy1_base = min(box_low, ma20) * 0.98
+        buy1 = round(buy1_base * (1 - discount * 0.3), 2)
+
+        # 2차: MA60~MA120 구간 → -15~20% 수준
+        buy2_base = min(ma60, ma120) * 0.97
+        buy2 = round(buy2_base * (1 - discount * 0.5) * vix_multiplier * 0.97, 2)
+
+        # 3차: 역사적 저점 or 극단 공포 구간 → -30% 이하
+        hist_low = min(prices) if prices else price * 0.60
+        buy3_base = max(hist_low * 1.02, price * 0.65)  # 역사적 저점 or 현재가 35% 아래
+        buy3 = round(buy3_base * (1 - discount * 0.7) * vix_multiplier * 0.94, 2)
+
+        # 타점 역전 방지
+        buy1 = min(buy1, price * 0.93)
+        buy2 = min(buy2, buy1 * 0.88)
+        buy3 = min(buy3, buy2 * 0.82)
+
+        # 매도/손절
+        sell = round(price * (1.10 + rsi * 0.0005), 2)  # RSI 반영 목표가
+        stop_loss = round(buy3 * 0.93, 2)
+
+        # ★ 시나리오 문구
+        fear_greed_score = _cache.get("fear_greed", 50)
         scenario = get_sniper_scenario(fear_greed_score, discount, triggered, is_emergency, emergency_reason)
-        return {"ticker": ticker, "current": price, "buy1": round(price * (0.97 - discount), 2), "buy2": round(price * (0.93 - discount), 2), "buy3": round(price * (0.88 - discount), 2), "sell": round(price * 1.08, 2), "stop_loss": round(price * 0.85, 2), "is_bad_news": discount > 0.02, "discount_pct": round(discount * 100, 1), "triggered_keywords": triggered[:5], "scenario": scenario, "is_emergency": is_emergency, "emergency_reason": emergency_reason, "currency": "KRW" if len(ticker) == 6 and ticker.isdigit() else "USD", "updated_at": datetime.now().isoformat()}
+
+        # ★ 전략적 근거 한 줄
+        strategic_brief = ""
+        if risk_memory:
+            top_risk = list(risk_memory.keys())[0]
+            strategic_brief = f"⚠️ {top_risk} 리스크 메모리 활성 — 벙커 타점 {round(extra_discount*100)}% 추가 하향 적용"
+        elif vix > 30:
+            strategic_brief = f"VIX {vix:.0f} 극단 공포 — 2·3차 벙커 중심 분할 매집 구간"
+        elif discount > 0.08:
+            strategic_brief = f"악재 가중치 {round(discount*100)}% 적용 — 타점 보수적 조정 완료"
+        elif rsi < 35:
+            strategic_brief = f"RSI {rsi} 과매도 — 1차 정찰대 타점 근접, 기술적 반등 기대"
+        else:
+            strategic_brief = f"MA60({round(ma60):,}) 지지 확인 중 — 분할 매수 대기"
+
+        return {
+            "ticker": ticker, "current": price,
+            "buy1": buy1, "buy2": buy2, "buy3": buy3,
+            "sell": sell, "stop_loss": stop_loss,
+            "is_bad_news": discount > 0.03,
+            "discount_pct": round(discount * 100, 1),
+            "triggered_keywords": triggered[:5],
+            "scenario": scenario,
+            "strategic_brief": strategic_brief,
+            "is_emergency": is_emergency,
+            "emergency_reason": emergency_reason,
+            "currency": "KRW" if len(ticker) == 6 and ticker.isdigit() else "USD",
+            "updated_at": datetime.now().isoformat(),
+            "indicators": {
+                "rsi": rsi, "ma20": round(ma20, 2),
+                "ma60": round(ma60, 2), "ma120": round(ma120, 2),
+                "box_low": round(box_low, 2), "vix_mult": round(vix_multiplier, 2),
+            }
+        }
     except Exception as e:
         print(f"추천 계산 오류 {ticker}: {e}")
         return None
