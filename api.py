@@ -1264,7 +1264,9 @@ async def chat_proxy(req: FastAPIRequest):
                 }
             )
         data = res.json()
-        return {"content": data.get("content", [{"type": "text", "text": "응답 오류"}])}
+        if "error" in data:
+            return {"content": [{"type": "text", "text": f"API 오류: {data['error'].get('message', str(data['error']))}"}]}
+        return {"content": data.get("content", [{"type": "text", "text": f"응답 없음: {data}"}])}
     except Exception as e:
         print(f"채팅 프록시 오류: {e}")
         return {"content": [{"type": "text", "text": f"참모실 연결 오류: {str(e)}"}]}
