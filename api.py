@@ -1239,6 +1239,36 @@ def get_recommend_tech(ticker: str):
     if rec: return rec
     return {"error": "기술적 분석 실패"}
 
+from fastapi import Request as FastAPIRequest
+
+@app.post("/api/chat")
+async def chat_proxy(req: FastAPIRequest):
+    try:
+        import httpx
+        body = await req.json()
+        messages = body.get("messages", [])
+        system   = body.get("system", "")
+        async with httpx.AsyncClient(timeout=40.0) as client:
+            res = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "Content-Type": "application/json",
+                    "anthropic-version": "2023-06-01",
+                    "x-api-key": os.environ.get("ANTHROPIC_API_KEY", ""),
+                },
+                json={
+                    "model": "claude-haiku-4-5-20251001",
+                    "max_tokens": 800,
+                    "system": system,
+                    "messages": messages,
+                }
+            )
+        data = res.json()
+        return {"content": data.get("content", [{"type": "text", "text": "응답 오류"}])}
+    except Exception as e:
+        print(f"채팅 프록시 오류: {e}")
+        return {"content": [{"type": "text", "text": f"참모실 연결 오류: {str(e)}"}]}
+
 @app.websocket("/ws/stocks")
 async def websocket_stocks(websocket: WebSocket):
     await websocket.accept()
