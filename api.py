@@ -118,6 +118,12 @@ EXTREME_POSITIVE = {
     "bullish": 6, "growth": 4, "profit": 4, "recovery": 6,
     "outperform": 6, "boom": 6, "상승": 4, "강세": 6,
     "반등": 6, "수혜": 4, "호조": 6, "흑자": 6, "매수": 4,
+     # ★ 휴전/협상/호전 키워드
+    "ceasefire": 12, "truce": 12, "휴전": 12, "종전": 12,
+    "peace deal": 12, "peace talks": 10, "negotiation": 8,
+    "settlement": 8, "협상": 8, "합의": 8, "호전": 8,
+    "de-escalation": 10, "diplomatic": 6,
+    "rebound": 8, "upward": 6, "relief rally": 10,
 }
 
 EXTREME_NEGATIVE = {
@@ -191,10 +197,18 @@ def get_news_sentiment(news_list=None):
         now = datetime.now()
         risk_memory = _cache.get("risk_keyword_memory", {})
 
-        # 현재 뉴스에서 위험 키워드 감지 → 메모리 저장
-        for kw in HIGH_RISK_KEYWORDS:
-            if kw.lower() in text:
-                risk_memory[kw] = now.isoformat()
+         # ★ 휴전/협상 감지 시 위험 메모리 즉시 해제
+        PEACE_KEYWORDS = ["ceasefire", "truce", "휴전", "종전", "peace deal", "협상 타결", "합의", "de-escalation"]
+        peace_detected = any(kw.lower() in text for kw in PEACE_KEYWORDS)
+        if peace_detected:
+            print(f"☮️ 휴전/협상 감지 → 위험 메모리 초기화")
+            risk_memory.clear()
+
+        # 현재 뉴스에서 위험 키워드 감지 → 메모리 저장 (휴전 시엔 저장 안 함)
+        if not peace_detected:
+            for kw in HIGH_RISK_KEYWORDS:
+                if kw.lower() in text:
+                    risk_memory[kw] = now.isoformat()
 
         # 24시간 지난 메모리 삭제
         expired = [k for k, v in risk_memory.items()
